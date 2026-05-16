@@ -14,6 +14,7 @@ export function Button({ children, className, variant = "primary", type = "butto
       type={type}
       className={cn(
         "focus-ring inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl px-5 text-sm font-bold transition duration-200 active:scale-[0.98]",
+        "disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100",
         variants[variant],
         className,
       )}

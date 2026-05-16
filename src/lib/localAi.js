@@ -2,6 +2,8 @@ import JSZip from "jszip";
 import mammoth from "mammoth";
 
 const GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_TIMEOUT_MS = 45000;
+const YOUTUBE_TIMEOUT_MS = 15000;
 
 export async function generateLocalCourse({ topic, files = [], level, duration, goal }) {
   const fileContexts = await Promise.all(files.map(extractLocalFileContext));
@@ -22,14 +24,14 @@ export async function generateLocalCourse({ topic, files = [], level, duration, 
 export async function answerLocalQuestion({ message, course, module, lesson, history = [] }) {
   const context = [
     course ? `Course: ${course.title}\n${course.description || ""}` : "",
-    module ? `Module: ${module.title}\n${module.explanation || ""}` : "",
+    module ? `Lesson: ${module.title}\n${module.explanation || ""}` : "",
     lesson?.content || "",
   ]
     .filter(Boolean)
     .join("\n\n");
 
   if (!hasGeminiKey()) {
-    return `Local AI key is not configured yet. Based on the current module context: ${context.slice(0, 500) || "create a course first, then ask again."}`;
+    return `Local AI key is not configured yet. Based on the current lesson context: ${context.slice(0, 500) || "create a course first, then ask again."}`;
   }
 
   const prompt = `
@@ -49,37 +51,87 @@ ${message}
   return generateGeminiText(prompt);
 }
 
-export async function searchYouTubeVideos(query) {
-  if (!hasYouTubeKey()) {
-    throw new Error("Add YOUTUBE_API_KEY or VITE_YOUTUBE_API_KEY to .env.local, then restart npm run dev.");
-  }
+export async function searchYouTubeVideos(queryInput) {
+  ensureYouTubeConfigured();
+  const query = normalizeVideoQuery(queryInput);
+  const searches = [
+    await fetchYouTubeSearchResults(query, "medium"),
+    await fetchYouTubeSearchResults(query, "long"),
+  ];
+  const videoIds = [...new Set(searches.flat().map((item) => item.id?.videoId).filter(Boolean))];
+  const details = await fetchYouTubeVideoDetails(videoIds);
 
+  return details
+    .filter((video) => isLessonVideo(video, query))
+    .slice(0, 3)
+    .map((video) => ({
+      title: video.title,
+      url: `https://www.youtube.com/watch?v=${video.id}`,
+      thumbnail_url: video.thumbnail_url,
+      channel_title: video.channel_title,
+      source: "youtube",
+    }));
+}
+
+async function fetchYouTubeSearchResults(query, videoDuration) {
   const params = new URLSearchParams({
     key: import.meta.env.VITE_YOUTUBE_API_KEY,
     part: "snippet",
-    q: `${query} tutorial lesson`,
-    maxResults: "3",
+    q: `${query.searchText} tutorial lesson explained -shorts -#shorts`,
+    maxResults: "8",
+    order: "relevance",
     type: "video",
     safeSearch: "strict",
     videoEmbeddable: "true",
+    videoDuration,
   });
 
-  const response = await fetch(`https://www.googleapis.com/youtube/v3/search?${params.toString()}`);
+  const response = await fetchWithTimeout(
+    `https://www.googleapis.com/youtube/v3/search?${params.toString()}`,
+    {},
+    YOUTUBE_TIMEOUT_MS,
+    "YouTube search",
+  );
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
     throw new Error(payload?.error?.message || "YouTube search failed");
   }
 
-  return (payload.items || [])
-    .filter((item) => item.id?.videoId)
-    .map((item) => ({
-      title: item.snippet?.title || "Recommended video",
-      url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
-      thumbnail_url: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || "",
-      channel_title: item.snippet?.channelTitle || "YouTube",
-      source: "youtube",
-    }));
+  return payload.items || [];
+}
+
+async function fetchYouTubeVideoDetails(videoIds) {
+  if (!videoIds.length) {
+    return [];
+  }
+
+  const params = new URLSearchParams({
+    key: import.meta.env.VITE_YOUTUBE_API_KEY,
+    part: "snippet,contentDetails",
+    id: videoIds.join(","),
+  });
+
+  const response = await fetchWithTimeout(
+    `https://www.googleapis.com/youtube/v3/videos?${params.toString()}`,
+    {},
+    YOUTUBE_TIMEOUT_MS,
+    "YouTube video details",
+  );
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || "YouTube video details failed");
+  }
+
+  return (payload.items || []).map((item) => ({
+    id: item.id,
+    title: item.snippet?.title || "Recommended video",
+    description: item.snippet?.description || "",
+    durationSeconds: parseYouTubeDuration(item.contentDetails?.duration),
+    thumbnail_url: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || "",
+    channel_title: item.snippet?.channelTitle || "YouTube",
+  }));
 }
 
 async function generateGeminiCourse({ topic, materialText, level, duration, goal }) {
@@ -106,7 +158,7 @@ Return only valid JSON:
   "learningOutcomes": ["outcome"],
   "modules": [
     {
-      "title": "Module title",
+      "title": "Lesson title",
       "summary": "Short summary",
       "explanation": "Clear teaching explanation in 1-3 paragraphs",
       "keyConcepts": ["concept"],
@@ -130,8 +182,8 @@ Return only valid JSON:
 }
 
 Rules:
-- Create 4 to 6 modules.
-- Create exactly 5 quiz questions per module.
+- Create 4 to 6 lessons.
+- Create exactly 5 quiz questions per lesson.
 - Every question has exactly 4 options and a zero-based correctOptionIndex.
 `;
 
@@ -140,20 +192,25 @@ Rules:
 }
 
 async function generateGeminiText(prompt, json = false) {
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": import.meta.env.VITE_GEMINI_API_KEY,
-    },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.35,
-        responseMimeType: json ? "application/json" : "text/plain",
+  const response = await fetchWithTimeout(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": import.meta.env.VITE_GEMINI_API_KEY,
       },
-    }),
-  });
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.35,
+          responseMimeType: json ? "application/json" : "text/plain",
+        },
+      }),
+    },
+    GEMINI_TIMEOUT_MS,
+    "Gemini request",
+  );
 
   const payload = await response.json().catch(() => ({}));
 
@@ -258,7 +315,7 @@ function normalizeCourse(course) {
 }
 
 function normalizeModule(module, index) {
-  const title = text(module?.title, `Module ${index + 1}`);
+  const title = text(module?.title, `Lesson ${index + 1}`);
   const questions = (Array.isArray(module?.quiz?.questions) ? module.quiz.questions : []).slice(0, 5).map((question) => normalizeQuestion(question, title));
 
   while (questions.length < 5) {
@@ -268,7 +325,7 @@ function normalizeModule(module, index) {
   return {
     title,
     summary: text(module?.summary, `Learn ${title}.`),
-    explanation: text(module?.explanation, `This module explains ${title} with concise examples and practice.`),
+    explanation: text(module?.explanation, `This lesson explains ${title} with concise examples and practice.`),
     keyConcepts: stringArray(module?.keyConcepts).slice(0, 8),
     examples: stringArray(module?.examples).slice(0, 5),
     practiceTasks: stringArray(module?.practiceTasks).slice(0, 5),
@@ -299,8 +356,132 @@ function hasGeminiKey() {
   return Boolean(import.meta.env.VITE_GEMINI_API_KEY);
 }
 
+export function ensureYouTubeConfigured() {
+  if (!hasYouTubeKey()) {
+    throw new Error("Course was not saved because YouTube videos are required. Add VITE_YOUTUBE_API_KEY or YOUTUBE_API_KEY to .env.local, then restart npm run dev.");
+  }
+}
+
 function hasYouTubeKey() {
   return Boolean(import.meta.env.VITE_YOUTUBE_API_KEY);
+}
+
+function normalizeVideoQuery(input) {
+  if (typeof input === "string") {
+    return {
+      courseTitle: "",
+      lessonTitle: input,
+      searchText: input,
+      courseKeywords: [],
+      lessonKeywords: keywordsFrom(input),
+    };
+  }
+
+  const courseTitle = text(input?.courseTitle, "");
+  const lessonTitle = text(input?.lessonTitle, "");
+  const searchText = [courseTitle, lessonTitle].filter(Boolean).join(" ");
+
+  return {
+    courseTitle,
+    lessonTitle,
+    searchText,
+    courseKeywords: keywordsFrom(courseTitle),
+    lessonKeywords: keywordsFrom(lessonTitle),
+  };
+}
+
+function isLessonVideo(video, query) {
+  const searchableText = normalizeWords(`${video.title} ${video.description}`);
+  if (/(^|\s|#)shorts?($|\s|#)/.test(searchableText) || video.durationSeconds < 240) {
+    return false;
+  }
+
+  const lessonMatches = countKeywordMatches(searchableText, query.lessonKeywords);
+  const courseMatches = countKeywordMatches(searchableText, query.courseKeywords);
+
+  if (!query.lessonKeywords.length) {
+    return courseMatches >= Math.min(2, query.courseKeywords.length || 1);
+  }
+
+  return lessonMatches >= Math.min(1, query.lessonKeywords.length) && (courseMatches >= 1 || lessonMatches >= 2 || !query.courseKeywords.length);
+}
+
+function parseYouTubeDuration(value = "") {
+  const match = value.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/);
+  if (!match) {
+    return 0;
+  }
+
+  const [, hours = 0, minutes = 0, seconds = 0] = match.map((part) => Number(part || 0));
+  return hours * 3600 + minutes * 60 + seconds;
+}
+
+function keywordsFrom(value = "") {
+  const keywords = normalizeWords(value).split(/\s+/).filter((word) => word.length >= 3 && !VIDEO_STOP_WORDS.has(word));
+  return [
+    ...new Set(
+      keywords.flatMap((word) => {
+        const variants = [word];
+        if (word.endsWith("s") && word.length > 4) {
+          variants.push(word.slice(0, -1));
+        }
+        return variants;
+      }),
+    ),
+  ];
+}
+
+function countKeywordMatches(textValue, keywords) {
+  return keywords.filter((keyword) => textValue.includes(keyword)).length;
+}
+
+function normalizeWords(value = "") {
+  return String(value).toLowerCase().replace(/[^a-z0-9#+]+/g, " ").trim();
+}
+
+const VIDEO_STOP_WORDS = new Set([
+  "and",
+  "for",
+  "the",
+  "with",
+  "from",
+  "into",
+  "module",
+  "lesson",
+  "course",
+  "tutorial",
+  "explained",
+  "introduction",
+  "intro",
+  "overview",
+  "basic",
+  "basics",
+  "foundation",
+  "foundations",
+  "core",
+  "concept",
+  "concepts",
+  "practice",
+  "review",
+  "example",
+  "examples",
+  "worked",
+]);
+
+async function fetchWithTimeout(url, options = {}, timeoutMs, label) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)} seconds. Check your API key or network, then try again.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function cleanJson(text) {

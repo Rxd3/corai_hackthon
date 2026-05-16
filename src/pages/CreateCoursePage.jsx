@@ -9,7 +9,7 @@ import { useLearningData } from "../contexts/LearningDataContext";
 const steps = [
   "Upload or type a topic",
   "AI extracts learning outcomes",
-  "AI builds modules",
+  "AI builds lessons",
   "AI adds quizzes and videos",
   "You track your progress",
 ];
@@ -49,18 +49,22 @@ export function CreateCoursePage() {
         subtitle="Turn any material or topic into a structured learning path."
       />
       <div className="mb-5 rounded-[22px] bg-peach px-5 py-4 text-sm font-bold leading-6 text-navy">
-        Local AI mode: data is saved in this browser only. Gemini is used when GEMINI_API_KEY or VITE_GEMINI_API_KEY is present in .env.local.
+        Local AI mode: data is saved in this browser only. Courses are saved only after non-Shorts YouTube videos are found for every lesson.
       </div>
       {loading ? (
-        <p className="mb-5 rounded-[22px] bg-navy px-5 py-4 text-sm font-bold text-white">
-          Generating your course. This can take a little while for uploaded files.
+        <p className="mb-5 rounded-[22px] bg-navy px-5 py-4 text-sm font-bold leading-6 text-white" aria-live="polite">
+          Generating your course and finding lesson videos. The course will not be saved unless videos are ready.
         </p>
       ) : null}
       {status ? <p className="mb-5 rounded-[22px] bg-lime px-5 py-4 text-sm font-bold text-navy">{status}</p> : null}
-      {error ? <p className="mb-5 rounded-[22px] bg-[#fff0ea] px-5 py-4 text-sm font-bold text-[#d44724]">{error}</p> : null}
+      {error ? (
+        <p className="mb-5 rounded-[22px] bg-[#fff0ea] px-5 py-4 text-sm font-bold leading-6 text-[#d44724]" role="alert">
+          {error}
+        </p>
+      ) : null}
       <div className="grid gap-5 2xl:grid-cols-2">
-        <UploadMaterialsCard onGenerate={handleGenerate} />
-        <TopicInputCard onBuild={handleGenerate} />
+        <UploadMaterialsCard onGenerate={handleGenerate} disabled={loading} />
+        <TopicInputCard onBuild={handleGenerate} disabled={loading} />
       </div>
     </div>
   );

@@ -24,7 +24,7 @@ export function QuizResultCard({ attempt, weakTopics = [], onReview, onRetake, o
       ) : null}
       <div className="mt-7 flex flex-wrap justify-center gap-3">
         <Button variant="outline" onClick={onReview}>
-          Review Module
+          Review Lesson
         </Button>
         <Button variant="peach" onClick={onRetake}>
           <RotateCcw size={17} />

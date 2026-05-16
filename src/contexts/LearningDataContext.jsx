@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { generateLocalCourse, answerLocalQuestion, searchYouTubeVideos } from "../lib/localAi";
+import { generateLocalCourse, answerLocalQuestion, ensureYouTubeConfigured, searchYouTubeVideos } from "../lib/localAi";
 import {
   courseProgress,
   decorateCourse,
@@ -11,6 +11,7 @@ import {
 
 const LearningDataContext = createContext(null);
 const STORAGE_KEY = "corai.local.v1";
+const VIDEO_FILTER_VERSION = "subject-non-shorts-v1";
 const localUserId = "local-demo-user";
 
 const emptyState = {
@@ -45,17 +46,19 @@ export function LearningDataProvider({ children }) {
     setError("");
 
     try {
+      ensureYouTubeConfigured();
       const generated = await generateLocalCourse(payload);
-      const nextState = buildCourseState(loadState(), generated.course, payload, generated.fileContexts);
+      const moduleVideos = await loadGeneratedCourseVideos(generated.course);
+      const nextState = buildCourseState(loadState(), generated.course, payload, generated.fileContexts, moduleVideos);
       setState(nextState);
       return {
         courseId: nextState.courses[0].id,
         fallback: generated.fallback,
         message: generated.fallback
           ? generated.error
-            ? `Course created with local fallback content. Gemini issue: ${generated.error}`
-            : "Course created with local fallback content. Add VITE_GEMINI_API_KEY for real AI generation."
-          : "Course generated with Gemini.",
+            ? `Course created with local fallback content and YouTube videos. Gemini issue: ${generated.error}`
+            : "Course created with local fallback content and YouTube videos. Add VITE_GEMINI_API_KEY for real AI generation."
+          : "Course generated with Gemini and YouTube videos.",
       };
     } catch (createError) {
       setError(createError.message);
@@ -160,12 +163,12 @@ export function LearningDataProvider({ children }) {
 
   const loadVideosForModule = useCallback(async ({ course, module }) => {
     const current = loadState();
-    const cached = current.videos.filter((video) => video.module_id === module.id);
+    const cached = current.videos.filter((video) => video.module_id === module.id && video.filter_version === VIDEO_FILTER_VERSION);
     if (cached.length) {
       return { videos: cached, cached: true };
     }
 
-    const videos = await searchYouTubeVideos(`${course.title} ${module.title}`);
+    const videos = await searchYouTubeVideos({ courseTitle: course.title, lessonTitle: module.title });
     const now = new Date().toISOString();
     const rows = videos.map((video) => ({
       id: id("video"),
@@ -177,12 +180,13 @@ export function LearningDataProvider({ children }) {
       thumbnail_url: video.thumbnail_url,
       channel_title: video.channel_title,
       source: video.source,
+      filter_version: VIDEO_FILTER_VERSION,
       created_at: now,
     }));
 
     setState((latest) => ({
       ...latest,
-      videos: [...latest.videos, ...rows],
+      videos: [...latest.videos.filter((video) => video.module_id !== module.id), ...rows],
     }));
 
     return { videos: rows, cached: false };
@@ -242,7 +246,24 @@ export function useLearningData() {
   return context;
 }
 
-function buildCourseState(current, course, payload, fileContexts) {
+async function loadGeneratedCourseVideos(course) {
+  if (!course.modules.length) {
+    throw new Error("Course was not saved because no lessons were generated, so videos could not be attached.");
+  }
+
+  const moduleVideos = [];
+  for (const module of course.modules) {
+    const videos = await searchYouTubeVideos({ courseTitle: course.title, lessonTitle: module.title });
+    if (!videos.length) {
+      throw new Error(`Course was not saved because no non-Shorts YouTube lesson videos matched "${module.title}".`);
+    }
+    moduleVideos.push(videos);
+  }
+
+  return moduleVideos;
+}
+
+function buildCourseState(current, course, payload, fileContexts, moduleVideos = []) {
   const now = new Date().toISOString();
   const courseId = id("course");
   const courseRow = {
@@ -266,6 +287,7 @@ function buildCourseState(current, course, payload, fileContexts) {
 
   const modules = [];
   const lessons = [];
+  const videos = [];
   const quizzes = [];
   const questions = [];
   const studyPlan = [];
@@ -296,6 +318,22 @@ function buildCourseState(current, course, payload, fileContexts) {
       module_id: moduleId,
       content: module.explanation,
       created_at: now,
+    });
+
+    (moduleVideos[index] || []).forEach((video) => {
+      videos.push({
+        id: id("video"),
+        user_id: localUserId,
+        course_id: courseId,
+        module_id: moduleId,
+        title: video.title,
+        url: video.url,
+        thumbnail_url: video.thumbnail_url,
+        channel_title: video.channel_title,
+        source: video.source,
+        filter_version: VIDEO_FILTER_VERSION,
+        created_at: now,
+      });
     });
 
     quizzes.push({
@@ -329,7 +367,7 @@ function buildCourseState(current, course, payload, fileContexts) {
       user_id: localUserId,
       course_id: courseId,
       module_id: moduleId,
-      title: `Module ${index + 1}: ${module.title}`,
+      title: `Lesson ${index + 1}: ${module.title}`,
       meta: `${module.estimatedMinutes} min lesson + quiz`,
       kind: "lesson",
       due_date: addDays(index),
@@ -355,6 +393,7 @@ function buildCourseState(current, course, payload, fileContexts) {
     ],
     modules: [...modules, ...current.modules],
     lessons: [...lessons, ...current.lessons],
+    videos: [...videos, ...current.videos],
     quizzes: [...quizzes, ...current.quizzes],
     questions: [...questions, ...current.questions],
     studyPlan: [...studyPlan, ...current.studyPlan],

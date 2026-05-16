@@ -9,7 +9,7 @@ export function ProgressTable({ modules = [] }) {
         <table className="w-full min-w-[560px] border-separate border-spacing-y-2 text-left">
           <thead>
             <tr className="text-xs font-extrabold uppercase tracking-normal text-muted">
-              <th className="px-4 py-2">Module</th>
+              <th className="px-4 py-2">Lesson</th>
               <th className="px-4 py-2">Status</th>
               <th className="px-4 py-2">Quiz Score</th>
             </tr>

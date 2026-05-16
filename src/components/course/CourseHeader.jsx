@@ -10,7 +10,7 @@ export function CourseHeader({ course, onContinue }) {
           <p className="text-sm font-bold text-white/60">Generated from: {course.sourceFile}</p>
           <h1 className="mt-2 text-3xl font-extrabold tracking-normal sm:text-4xl">{course.title}</h1>
           <div className="mt-5 flex flex-wrap gap-3 text-sm font-bold text-white/72">
-            <span>{course.modules} modules</span>
+            <span>{course.modules} lessons</span>
             <span>{course.quizzes} quizzes</span>
             <span>Estimated time: {course.duration}</span>
             <span>Progress: {course.progress}%</span>

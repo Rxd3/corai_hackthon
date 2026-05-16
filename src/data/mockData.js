@@ -135,11 +135,11 @@ export const recommendedTasks = [
 ];
 
 export const studyWeek = [
-  { day: "Monday", task: "Module 1: Networking Basics", meta: "35 min lesson" },
+  { day: "Monday", task: "Lesson 1: Networking Basics", meta: "35 min lesson" },
   { day: "Tuesday", task: "Quiz 1 + Review", meta: "Practice and feedback" },
-  { day: "Wednesday", task: "Module 2: IP Addressing", meta: "Video lesson" },
+  { day: "Wednesday", task: "Lesson 2: IP Addressing", meta: "Video lesson" },
   { day: "Thursday", task: "Practice Task", meta: "IP address exercises" },
-  { day: "Friday", task: "Module 3: Subnetting", meta: "Needs focus" },
+  { day: "Friday", task: "Lesson 3: Subnetting", meta: "Needs focus" },
   { day: "Saturday", task: "Review Weak Topics", meta: "30 min review" },
   { day: "Sunday", task: "Rest / Catch up", meta: "Flexible session" },
 ];

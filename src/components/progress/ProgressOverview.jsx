@@ -13,8 +13,8 @@ export function ProgressOverview({ course, modules = [] }) {
           <p className="mt-2 text-sm font-bold text-muted">{course?.progress || 0}% Complete</p>
         </div>
         <div className="grid grid-cols-1 gap-3 text-sm font-bold text-muted sm:grid-cols-3">
-          <span className="rounded-2xl bg-gray-50 px-4 py-3">Completed: {completed} modules</span>
-          <span className="rounded-2xl bg-gray-50 px-4 py-3">Remaining: {Math.max(0, modules.length - completed)} modules</span>
+          <span className="rounded-2xl bg-gray-50 px-4 py-3">Completed: {completed} lessons</span>
+          <span className="rounded-2xl bg-gray-50 px-4 py-3">Remaining: {Math.max(0, modules.length - completed)} lessons</span>
           <span className="rounded-2xl bg-gray-50 px-4 py-3">Next: {next?.title || "All done"}</span>
         </div>
       </div>

@@ -21,7 +21,7 @@ export function ProgressTrackingPage() {
       <PageHeader title="Progress Tracking" subtitle="Track your courses, quiz scores, weak topics, and study activity." />
       <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
         <StatsCard value={`${course?.progress || 0}%`} label="Overall Progress" />
-        <StatsCard value={modules.filter((module) => module.progress >= 100).length} label="Modules Completed" />
+        <StatsCard value={modules.filter((module) => module.progress >= 100).length} label="Lessons Completed" />
         <StatsCard value={`${average}%`} label="Average Quiz Score" />
         <StatsCard value={studyStreak(attempts)} label="Days Study Streak" />
       </div>
