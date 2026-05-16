@@ -119,20 +119,15 @@ export function LearningDataProvider({ children }) {
     }
   }, [authLoading, refresh]);
 
-  const signIn = useCallback(async ({ email, password }) => {
+  const signInWithGoogle = useCallback(async () => {
     if (!supabase) throw new Error("Supabase is not configured.");
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-    if (signInError) throw signInError;
-  }, []);
-
-  const signUp = useCallback(async ({ email, password, name }) => {
-    if (!supabase) throw new Error("Supabase is not configured.");
-    const { error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { full_name: name || email } },
+    const { error: googleError } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: window.location.origin,
+      },
     });
-    if (signUpError) throw signUpError;
+    if (googleError) throw googleError;
   }, []);
 
   const signOut = useCallback(async () => {
@@ -308,8 +303,7 @@ export function LearningDataProvider({ children }) {
       loading,
       error,
       refresh,
-      signIn,
-      signUp,
+      signInWithGoogle,
       signOut,
       resetData: signOut,
       createCourse,
@@ -352,9 +346,8 @@ export function LearningDataProvider({ children }) {
     refresh,
     saveQuizAttempt,
     session,
-    signIn,
+    signInWithGoogle,
     signOut,
-    signUp,
     state,
     updateModuleProgress,
   ]);

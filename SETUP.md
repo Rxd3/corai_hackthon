@@ -8,10 +8,26 @@ This project is prepared for Supabase + Vercel. You still need to create the thi
 2. Copy the Project URL to `VITE_SUPABASE_URL`.
 3. Copy the anon public key to `VITE_SUPABASE_ANON_KEY`.
 4. Copy the service role key to `SUPABASE_SERVICE_ROLE_KEY`.
-5. Enable Email Auth.
-6. Run `supabase/migrations/20260517000000_initial_backend.sql` in the Supabase SQL editor or through the Supabase CLI.
-7. Confirm the private `course-materials` bucket exists.
-8. Add redirect URLs:
+5. Enable the Google provider in Authentication.
+6. In Google Cloud, create an OAuth client.
+7. Add your app URLs as Authorized JavaScript origins:
+
+```text
+http://127.0.0.1:5173
+http://localhost:5173
+https://your-vercel-production-url.vercel.app
+```
+
+8. Add the Supabase callback URL as an Authorized redirect URI in Google Cloud:
+
+```text
+https://your-project-ref.supabase.co/auth/v1/callback
+```
+
+9. Paste the Google OAuth client ID and secret into the Supabase Google provider settings.
+10. Run `supabase/migrations/20260517000000_initial_backend.sql` in the Supabase SQL editor or through the Supabase CLI.
+11. Confirm the private `course-materials` bucket exists.
+12. Add redirect URLs:
 
 ```text
 http://127.0.0.1:5173/*
@@ -83,7 +99,7 @@ APP_ORIGIN=https://your-vercel-url.vercel.app
 
 5. Deploy a beta preview.
 6. Add the preview URL to Supabase Auth redirects.
-7. Test auth, course creation, uploads, videos, chat, quizzes, and refresh persistence.
+7. Test Google sign-in, course creation, uploads, videos, chat, quizzes, and refresh persistence.
 8. Promote to production when the beta works.
 
 ## 6. Before Pushing

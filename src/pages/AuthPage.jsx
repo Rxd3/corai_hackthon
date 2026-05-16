@@ -1,21 +1,14 @@
-import { Bot, LockKeyhole, Mail } from "lucide-react";
+import { Bot, Chrome, ShieldCheck, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { Button } from "../components/ui/Button";
 import { useLearningData } from "../contexts/LearningDataContext";
 
 export function AuthPage() {
-  const { signIn, signUp, isSupabaseConfigured } = useLearningData();
-  const [mode, setMode] = useState("signin");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [status, setStatus] = useState("");
+  const { signInWithGoogle, isSupabaseConfigured } = useLearningData();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit(event) {
-    event.preventDefault();
-    setStatus("");
+  async function handleGoogleSignIn() {
     setError("");
 
     if (!isSupabaseConfigured) {
@@ -25,16 +18,9 @@ export function AuthPage() {
 
     setLoading(true);
     try {
-      if (mode === "signin") {
-        await signIn({ email, password });
-      } else {
-        await signUp({ name, email, password });
-        setStatus("Account created. Check your email if confirmation is enabled, then sign in.");
-        setMode("signin");
-      }
+      await signInWithGoogle();
     } catch (authError) {
       setError(authError.message);
-    } finally {
       setLoading(false);
     }
   }
@@ -52,78 +38,38 @@ export function AuthPage() {
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-2 rounded-2xl bg-gray-100 p-1">
-          <button
-            type="button"
-            onClick={() => setMode("signin")}
-            className={mode === "signin" ? "rounded-xl bg-white px-3 py-2 text-sm font-extrabold text-navy shadow-sm" : "rounded-xl px-3 py-2 text-sm font-extrabold text-muted"}
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("signup")}
-            className={mode === "signup" ? "rounded-xl bg-white px-3 py-2 text-sm font-extrabold text-navy shadow-sm" : "rounded-xl px-3 py-2 text-sm font-extrabold text-muted"}
-          >
-            Sign Up
-          </button>
+        <div className="mt-7 rounded-[24px] bg-gray-50 p-5">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-lime text-navy">
+              <Sparkles size={18} />
+            </span>
+            <div>
+              <h2 className="text-lg font-extrabold text-ink">Continue With Google</h2>
+              <p className="mt-1 text-sm font-semibold leading-6 text-muted">
+                Use your Google account to create a private CorAI workspace.
+              </p>
+            </div>
+          </div>
+
+          <Button className="mt-5 w-full" onClick={handleGoogleSignIn} disabled={loading || !isSupabaseConfigured}>
+            <Chrome size={18} />
+            {loading ? "Opening Google..." : "Continue with Google"}
+          </Button>
         </div>
 
         {!isSupabaseConfigured ? (
           <p className="mt-5 rounded-2xl bg-[#fff0ea] p-4 text-sm font-bold leading-6 text-[#d44724]">
-            Supabase is not configured yet. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` to `.env.local`, then restart the dev server.
+            Supabase is not configured yet. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`, then redeploy.
           </p>
         ) : null}
-        {status ? <p className="mt-5 rounded-2xl bg-lime p-4 text-sm font-bold text-navy">{status}</p> : null}
-        {error ? <p className="mt-5 rounded-2xl bg-[#fff0ea] p-4 text-sm font-bold text-[#d44724]">{error}</p> : null}
+        {error ? <p className="mt-5 rounded-2xl bg-[#fff0ea] p-4 text-sm font-bold leading-6 text-[#d44724]">{error}</p> : null}
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-          {mode === "signup" ? (
-            <label className="block">
-              <span className="mb-2 block text-sm font-extrabold text-ink">Name</span>
-              <input
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                className="focus-ring min-h-12 w-full rounded-2xl border border-divider bg-gray-50 px-4 text-sm font-semibold text-ink outline-none focus:bg-white"
-                placeholder="Your name"
-              />
-            </label>
-          ) : null}
-
-          <label className="block">
-            <span className="mb-2 block text-sm font-extrabold text-ink">Email</span>
-            <span className="focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-navy flex min-h-12 items-center gap-3 rounded-2xl border border-divider bg-gray-50 px-4 focus-within:bg-white">
-              <Mail size={17} className="text-muted" />
-              <input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                className="w-full bg-transparent text-sm font-semibold text-ink outline-none"
-                placeholder="you@example.com"
-                required
-              />
-            </span>
-          </label>
-
-          <label className="block">
-            <span className="mb-2 block text-sm font-extrabold text-ink">Password</span>
-            <span className="focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-navy flex min-h-12 items-center gap-3 rounded-2xl border border-divider bg-gray-50 px-4 focus-within:bg-white">
-              <LockKeyhole size={17} className="text-muted" />
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                className="w-full bg-transparent text-sm font-semibold text-ink outline-none"
-                placeholder="At least 6 characters"
-                required
-              />
-            </span>
-          </label>
-
-          <Button type="submit" className="w-full" disabled={loading || !isSupabaseConfigured}>
-            {loading ? "Please wait..." : mode === "signin" ? "Sign In" : "Create Account"}
-          </Button>
-        </form>
+        <div className="mt-5 flex gap-3 rounded-[22px] border border-divider p-4">
+          <ShieldCheck size={18} className="mt-0.5 shrink-0 text-navy" />
+          <p className="text-xs font-bold leading-5 text-muted">
+            Google handles the sign-in screen. CorAI uses the returned session to keep courses, files, quizzes, and chats private.
+          </p>
+        </div>
       </section>
     </main>
   );
