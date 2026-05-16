@@ -10,59 +10,40 @@ import { VideoLessonCard } from "../components/module/VideoLessonCard";
 import { Button } from "../components/ui/Button";
 import { PageHeader } from "../components/ui/PageHeader";
 import { ProgressBar } from "../components/ui/ProgressBar";
-import { useAuth } from "../contexts/AuthContext";
 import { useLearningData } from "../contexts/LearningDataContext";
-import { apiFetch } from "../lib/apiClient";
 import { normalizeArray } from "../lib/learningTransforms";
-import { supabase } from "../lib/supabaseClient";
 
 export function ModuleLessonPage() {
   const { courseId, moduleId } = useParams();
-  const { user } = useAuth();
   const data = useLearningData();
   const module = data.getModule(moduleId);
   const course = data.getCourse(courseId);
   const videos = data.getVideos(moduleId);
   const [videoStatus, setVideoStatus] = useState("");
-  const [requestedVideos, setRequestedVideos] = useState(false);
+  const [videoLoading, setVideoLoading] = useState(false);
 
   useEffect(() => {
-    if (!moduleId || videos.length || requestedVideos) return;
+    if (!course || !module || videos.length || videoLoading || videoStatus) return;
 
     let active = true;
-    setRequestedVideos(true);
-    apiFetch(`/api/videos?moduleId=${moduleId}`)
+    setVideoLoading(true);
+    data
+      .loadVideosForModule({ course, module })
       .then((result) => {
-        if (active) {
-          setVideoStatus(result.message || "");
-          data.refresh();
-        }
+        if (!active) return;
+        setVideoStatus(result.videos.length ? "" : "No YouTube videos were found for this module.");
       })
-      .catch((error) => active && setVideoStatus(error.message));
+      .catch((error) => active && setVideoStatus(error.message))
+      .finally(() => active && setVideoLoading(false));
 
     return () => {
       active = false;
     };
-  }, [data, moduleId, requestedVideos, videos.length]);
+  }, [course, data, module, videoLoading, videoStatus, videos.length]);
 
   async function markPracticeComplete() {
-    if (!module || !user) return;
-
-    const existing = data.raw.progress.find((item) => item.module_id === module.id);
-    const sections = new Set(normalizeArray(existing?.completed_sections));
-    sections.add("practice");
-
-    await supabase.from("module_progress").upsert(
-      {
-        user_id: user.id,
-        course_id: course.id,
-        module_id: module.id,
-        completed_sections: [...sections],
-        percent: Math.max(existing?.percent || 0, 70),
-      },
-      { onConflict: "user_id,module_id" },
-    );
-    await data.refresh();
+    if (!module || !course) return;
+    await data.updateModuleProgress({ courseId: course.id, moduleId: module.id, section: "practice", percent: 70 });
   }
 
   if (!module || !course) {
@@ -80,6 +61,9 @@ export function ModuleLessonPage() {
         <ProgressBar value={module.progress} />
       </div>
 
+      {videoLoading ? (
+        <p className="mb-5 rounded-[20px] bg-navy px-4 py-3 text-sm font-bold text-white">Searching YouTube for this module...</p>
+      ) : null}
       {videoStatus ? <p className="mb-5 rounded-[20px] bg-peach px-4 py-3 text-sm font-bold text-navy">{videoStatus}</p> : null}
 
       <div className="space-y-5">

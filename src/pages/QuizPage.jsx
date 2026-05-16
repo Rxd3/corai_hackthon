@@ -3,14 +3,11 @@ import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { QuizQuestionCard } from "../components/quiz/QuizQuestionCard";
 import { PageHeader } from "../components/ui/PageHeader";
-import { useAuth } from "../contexts/AuthContext";
 import { useLearningData } from "../contexts/LearningDataContext";
-import { supabase } from "../lib/supabaseClient";
 
 export function QuizPage() {
   const navigate = useNavigate();
   const { courseId, moduleId } = useParams();
-  const { user } = useAuth();
   const data = useLearningData();
   const resolved = useMemo(() => resolveQuiz(data, courseId, moduleId), [courseId, data, moduleId]);
   const [questionIndex, setQuestionIndex] = useState(0);
@@ -38,56 +35,13 @@ export function QuizPage() {
     setSubmitting(true);
     setError("");
 
-    const incorrectTopics = [];
-    let correctCount = 0;
-
-    for (const question of questions) {
-      const answer = answers[question.id];
-      if (answer === question.correct_option_index) {
-        correctCount += 1;
-      } else if (question.topic) {
-        incorrectTopics.push(question.topic);
-      }
-    }
-
-    const score = Math.round((correctCount / questions.length) * 100);
-    const weakTopics = [...new Set(incorrectTopics)];
-
-    const { data: attempt, error: attemptError } = await supabase
-      .from("quiz_attempts")
-      .insert({
-        user_id: user.id,
-        course_id: resolved.course.id,
-        module_id: resolved.module.id,
-        quiz_id: resolved.quiz.id,
-        answers,
-        score,
-        total_questions: questions.length,
-        correct_count: correctCount,
-        weak_topics: weakTopics,
-      })
-      .select()
-      .single();
-
-    if (attemptError) {
-      setSubmitting(false);
-      setError(attemptError.message);
-      return;
-    }
-
-    await supabase.from("module_progress").upsert(
-      {
-        user_id: user.id,
-        course_id: resolved.course.id,
-        module_id: resolved.module.id,
-        completed_sections: score >= 60 ? ["lesson", "practice", "quiz"] : ["lesson", "practice"],
-        percent: score >= 60 ? 100 : Math.max(70, score),
-        completed_at: score >= 60 ? new Date().toISOString() : null,
-      },
-      { onConflict: "user_id,module_id" },
-    );
-
-    await data.refresh();
+    const attempt = await data.saveQuizAttempt({
+      course: resolved.course,
+      module: resolved.module,
+      quiz: resolved.quiz,
+      questions,
+      answers,
+    });
     navigate(`/quiz-result/${attempt.id}`);
   }
 

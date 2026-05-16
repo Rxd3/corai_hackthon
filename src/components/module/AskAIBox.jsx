@@ -1,9 +1,10 @@
 import { Send, Sparkles } from "lucide-react";
 import { useState } from "react";
-import { apiFetch } from "../../lib/apiClient";
+import { useLearningData } from "../../contexts/LearningDataContext";
 import { Button } from "../ui/Button";
 
 export function AskAIBox({ courseId, moduleId }) {
+  const data = useLearningData();
   const [message, setMessage] = useState("");
   const [answer, setAnswer] = useState("");
   const [loading, setLoading] = useState(false);
@@ -15,11 +16,7 @@ export function AskAIBox({ courseId, moduleId }) {
     setError("");
 
     try {
-      const result = await apiFetch("/api/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ courseId, moduleId, message }),
-      });
+      const result = await data.askAi({ courseId, moduleId, message });
       setAnswer(result.answer);
       setMessage("");
     } catch (askError) {

@@ -5,7 +5,6 @@ import { TopicInputCard } from "../components/createCourse/TopicInputCard";
 import { UploadMaterialsCard } from "../components/createCourse/UploadMaterialsCard";
 import { PageHeader } from "../components/ui/PageHeader";
 import { useLearningData } from "../contexts/LearningDataContext";
-import { apiFetch, buildCourseFormData } from "../lib/apiClient";
 
 const steps = [
   "Upload or type a topic",
@@ -17,7 +16,7 @@ const steps = [
 
 export function CreateCoursePage() {
   const navigate = useNavigate();
-  const { refresh } = useLearningData();
+  const { createCourse } = useLearningData();
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -33,15 +32,9 @@ export function CreateCoursePage() {
 
     setLoading(true);
     try {
-      const result = await apiFetch("/api/generate-course", {
-        method: "POST",
-        body: buildCourseFormData(payload),
-      });
-      await refresh();
+      const result = await createCourse(payload);
       navigate(`/courses/${result.courseId}`);
-      if (result.fallback) {
-        setStatus(result.message);
-      }
+      setStatus(result.message);
     } catch (generateError) {
       setError(generateError.message);
     } finally {
@@ -56,7 +49,7 @@ export function CreateCoursePage() {
         subtitle="Turn any material or topic into a structured learning path."
       />
       <div className="mb-5 rounded-[22px] bg-peach px-5 py-4 text-sm font-bold leading-6 text-navy">
-        Demo privacy note: do not upload private or sensitive materials while using Gemini free tier.
+        Local AI mode: data is saved in this browser only. Gemini is used when GEMINI_API_KEY or VITE_GEMINI_API_KEY is present in .env.local.
       </div>
       {loading ? (
         <p className="mb-5 rounded-[22px] bg-navy px-5 py-4 text-sm font-bold text-white">
@@ -89,7 +82,7 @@ export function CreateCourseRightPanel() {
       </div>
       <div className="mt-6 rounded-[20px] bg-lime p-4 text-navy">
         <CheckCircle2 size={22} />
-        <p className="mt-3 text-sm font-extrabold leading-5">Real course generation is powered by Supabase and Gemini.</p>
+        <p className="mt-3 text-sm font-extrabold leading-5">Local-first mode lets you test the product before adding Supabase.</p>
       </div>
     </section>
   );

@@ -1,82 +1,73 @@
-# CorAI MVP Setup
+# CorAI Local Test Setup
 
-## 1. Supabase
+CorAI is now in local-first test mode. It does not require Supabase, Vercel, login, serverless functions, or database setup.
 
-1. Create a Supabase project.
-2. Open the SQL editor and run `supabase/migrations/001_corai_mvp.sql`.
-3. Enable Email Auth.
-4. Enable Google Auth if you want the Google login button to work.
-5. Add local and deployed redirect URLs in Supabase Auth settings:
-   - `http://localhost:5173`
-   - your Vercel production URL
-
-## 2. Environment Variables
-
-Copy `.env.example` to `.env.local` and fill:
+## Run Locally
 
 ```bash
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-GEMINI_API_KEY=
-YOUTUBE_API_KEY=
-APP_ORIGIN=http://localhost:5173
+npm install
+npm run dev
 ```
 
-Add the same values in Vercel Project Settings.
-
-### Avoid Supabase email rate limits while testing
-
-Supabase's built-in email sender is only for demos and is limited to 2 auth emails per hour. If signup shows `email rate limit exceeded`, choose one of these:
-
-1. Fast local demo: Supabase Dashboard -> Authentication -> Sign In / Providers -> Email -> turn **Confirm Email** off.
-2. Better demo: configure Google Auth and use **Continue with Google**.
-3. Production: Supabase Dashboard -> Authentication -> SMTP Settings / Custom SMTP -> add Resend, SendGrid, Postmark, Brevo, or another SMTP provider, then adjust Auth rate limits.
-
-After changing Auth settings, refresh the app and try again. You may need to wait until the old rate limit window resets if you keep email confirmation enabled.
-
-## 3. Local Development
-
-Use Vite for frontend-only checks. This mode does not run `/api/*`, so course generation and Ask CorAI will return 404:
-
-```bash
-npm run dev:ui
-```
-
-Use Vercel Dev for the full app with `/api/*` functions:
-
-```bash
-npm run dev:full
-```
-
-Then open `http://localhost:5173`. If port 5173 is already used by Vite, stop the old terminal first.
-
-## 4. Demo Privacy
-
-The app is configured for demo/non-sensitive materials while using Gemini free tier. Do not upload private or sensitive documents until you switch to a paid/private AI data handling setup.
-
-## 5. Vercel Deployment Checks
-
-After deploying, open this URL:
+Open the URL Vite prints, usually:
 
 ```text
-https://YOUR-VERCEL-APP.vercel.app/api/health
+http://127.0.0.1:5173
 ```
 
-Expected response:
+## Optional Gemini AI
 
-```json
-{
-  "ok": true,
-  "service": "corai-api"
-}
+To test real AI generation locally, create `.env.local`:
+
+```bash
+VITE_GEMINI_API_KEY=your_gemini_api_key
 ```
 
-If `/api/health` is 404:
+If you already have this from the earlier backend setup, it also works:
 
-1. Confirm the `api/` folder is committed and pushed to GitHub.
-2. In Vercel Project Settings, confirm **Root Directory** is this repo root, not `dist`, `src`, or another subfolder.
-3. Redeploy from Vercel after pushing the latest code.
-4. Do not deploy only the `dist/` folder; Vercel needs the project source so it can build serverless functions.
+```bash
+GEMINI_API_KEY=your_gemini_api_key
+```
 
-If `/api/health` works but course generation fails, check the `env` booleans in the health response and add any missing variable in Vercel Project Settings.
+Then restart:
+
+```bash
+npm run dev
+```
+
+If both Gemini keys are missing or Gemini fails, the app still works with local fallback course content.
+
+## Optional YouTube Videos
+
+To load real lesson videos locally, add one of these to `.env.local`:
+
+```bash
+VITE_YOUTUBE_API_KEY=your_youtube_api_key
+```
+
+or, if you already have the earlier backend variable:
+
+```bash
+YOUTUBE_API_KEY=your_youtube_api_key
+```
+
+Then restart `npm run dev`. In Google Cloud, enable **YouTube Data API v3** for that key. For local browser testing, either leave the key unrestricted while testing or allow HTTP referrers for `http://127.0.0.1:5173/*` and `http://localhost:5173/*`.
+
+## What Works Locally
+
+- Create course from a topic.
+- Upload TXT, Markdown, DOCX, and PPTX materials for local text extraction.
+- Generate modules, lessons, key concepts, examples, practice tasks, and quizzes.
+- Ask CorAI questions about the current course/module.
+- Take quizzes, save attempts, track progress, weak topics, and study plan.
+- All data is saved in browser `localStorage`.
+
+## Current Local Limitations
+
+- PDF text extraction is not enabled in browser-only mode.
+- YouTube lookup works locally when a YouTube API key is configured.
+- Do not deploy this local Gemini-key version publicly because `VITE_GEMINI_API_KEY` is exposed to the browser.
+
+## Later: Supabase + Vercel
+
+Once the local product flow feels good, add a backend again so API keys and uploaded files are private. The current app deliberately avoids Supabase/Vercel while you test the learning flow.

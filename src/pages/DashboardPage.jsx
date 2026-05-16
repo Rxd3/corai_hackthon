@@ -6,12 +6,10 @@ import { HeroProgress } from "../components/dashboard/HeroProgress";
 import { RecommendedTasks } from "../components/dashboard/RecommendedTasks";
 import { StatsCard } from "../components/dashboard/StatsCard";
 import { UpcomingCard } from "../components/dashboard/UpcomingCard";
-import { useAuth } from "../contexts/AuthContext";
 import { useLearningData } from "../contexts/LearningDataContext";
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const data = useLearningData();
   const completedModules = data.modules.filter((module) => module.progress >= 100 || module.status === "completed").length;
   const studyHours = Math.max(0.5, Math.round((data.attempts.length * 0.35 + completedModules * 0.5) * 10) / 10);
@@ -36,7 +34,7 @@ export function DashboardPage() {
 
       <HeroProgress
         courses={data.courses}
-        userName={displayName(user)}
+        userName="there"
         onCreate={() => navigate("/create")}
         onCourseOpen={(courseId) => navigate(`/courses/${courseId}`)}
       />
@@ -111,8 +109,4 @@ function buildRecommendedTasks(data) {
       modulePath: `/courses/${firstCourse.id}/modules/${reviewModule.id}`,
     },
   ];
-}
-
-function displayName(user) {
-  return user?.user_metadata?.full_name?.split(" ")[0] || user?.email?.split("@")[0] || "there";
 }

@@ -4,7 +4,6 @@ import { useParams } from "react-router-dom";
 import { Button } from "../components/ui/Button";
 import { PageHeader } from "../components/ui/PageHeader";
 import { useLearningData } from "../contexts/LearningDataContext";
-import { apiFetch } from "../lib/apiClient";
 
 const quickActions = ["Explain simpler", "Give example", "Generate flashcards", "Create practice question", "Summarize this module"];
 
@@ -44,14 +43,9 @@ export function AskAIPage() {
     setLocalAnswer("");
 
     try {
-      const result = await apiFetch("/api/ask", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ courseId, moduleId, message }),
-      });
+      const result = await data.askAi({ courseId, moduleId, message });
       setLocalAnswer(result.answer);
       setMessage("");
-      await data.refresh();
     } catch (askError) {
       setError(askError.message);
     } finally {
