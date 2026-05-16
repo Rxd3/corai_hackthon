@@ -24,7 +24,7 @@ export function UploadMaterialsCard({ onGenerate, disabled = false }) {
         </span>
         <div>
           <h2 className="text-xl font-extrabold text-ink">Upload Course Materials</h2>
-          <p className="mt-1 text-sm font-semibold text-muted">PDF, DOCX, PPTX, TXT, slides, or notes</p>
+          <p className="mt-1 text-sm font-semibold text-muted">DOCX, PPTX, TXT, Markdown, slides, or notes</p>
         </div>
       </div>
 
@@ -32,7 +32,7 @@ export function UploadMaterialsCard({ onGenerate, disabled = false }) {
         ref={inputRef}
         type="file"
         multiple
-        accept=".pdf,.docx,.pptx,.txt,.md"
+        accept=".docx,.pptx,.txt,.md,.markdown"
         className="hidden"
         onChange={handleFileChange}
       />

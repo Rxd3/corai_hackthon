@@ -1,11 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { apiRequest } from "../lib/apiClient";
 import {
-  generateLocalCourse,
-  answerLocalQuestion,
   buildModuleVideoSearchProfile,
+  extractLocalFileContext,
   improveStoredModuleForCourse,
   improveStoredQuestionsForModule,
-  searchYouTubeVideos,
 } from "../lib/localAi";
 import {
   courseProgress,
@@ -15,10 +14,9 @@ import {
   latestAttemptForQuiz,
   normalizeArray,
 } from "../lib/learningTransforms";
+import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 
 const LearningDataContext = createContext(null);
-const STORAGE_KEY = "corai.local.v1";
-const localUserId = "local-demo-user";
 
 const emptyState = {
   courses: [],
@@ -35,16 +33,112 @@ const emptyState = {
 };
 
 export function LearningDataProvider({ children }) {
-  const [state, setState] = useState(() => loadState());
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [state, setState] = useState(emptyState);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [state]);
+    if (!supabase) {
+      setAuthLoading(false);
+      return undefined;
+    }
+
+    let active = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active) return;
+      setSession(data.session || null);
+      setAuthLoading(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setAuthLoading(false);
+    });
+
+    return () => {
+      active = false;
+      listener?.subscription?.unsubscribe();
+    };
+  }, []);
 
   const refresh = useCallback(async () => {
-    setState(loadState());
+    if (!supabase || !session?.user) {
+      setState(emptyState);
+      return emptyState;
+    }
+
+    const userId = session.user.id;
+    const [
+      courses,
+      sources,
+      modules,
+      lessons,
+      videos,
+      quizzes,
+      questions,
+      attempts,
+      progress,
+      studyPlan,
+      messages,
+    ] = await Promise.all([
+      selectRows("courses", userId, { order: "created_at", ascending: false }),
+      selectRows("sources", userId, { order: "created_at", ascending: false }),
+      selectRows("modules", userId, { order: "position", ascending: true }),
+      selectRows("lessons", userId, { order: "created_at", ascending: true }),
+      selectRows("videos", userId, { order: "match_score", ascending: false }),
+      selectRows("quizzes", userId, { order: "created_at", ascending: true }),
+      selectRows("questions", userId, { order: "position", ascending: true }),
+      selectRows("attempts", userId, { order: "created_at", ascending: false }),
+      selectRows("progress", userId, { order: "updated_at", ascending: false }),
+      selectRows("study_plan", userId, { order: "due_date", ascending: true }),
+      selectRows("messages", userId, { order: "created_at", ascending: true }),
+    ]);
+
+    const nextState = migrateState({
+      courses,
+      sources,
+      modules,
+      lessons,
+      videos,
+      quizzes,
+      questions,
+      attempts,
+      progress,
+      studyPlan,
+      messages,
+    });
+    setState(nextState);
+    return nextState;
+  }, [session]);
+
+  useEffect(() => {
+    if (!authLoading) {
+      refresh().catch((refreshError) => setError(refreshError.message));
+    }
+  }, [authLoading, refresh]);
+
+  const signIn = useCallback(async ({ email, password }) => {
+    if (!supabase) throw new Error("Supabase is not configured.");
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    if (signInError) throw signInError;
+  }, []);
+
+  const signUp = useCallback(async ({ email, password, name }) => {
+    if (!supabase) throw new Error("Supabase is not configured.");
+    const { error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: name || email } },
+    });
+    if (signUpError) throw signUpError;
+  }, []);
+
+  const signOut = useCallback(async () => {
+    if (!supabase) return;
+    await supabase.auth.signOut();
+    setState(emptyState);
   }, []);
 
   const createCourse = useCallback(async (payload) => {
@@ -52,17 +146,30 @@ export function LearningDataProvider({ children }) {
     setError("");
 
     try {
-      const generated = await generateLocalCourse(payload);
-      const nextState = buildCourseState(loadState(), generated.course, payload, generated.fileContexts);
-      setState(nextState);
+      const files = Array.from(payload.files || []);
+      const fileContexts = await Promise.all(files.map(extractLocalFileContext));
+      const result = await apiRequest("/api/courses/generate", {
+        topic: payload.topic || "",
+        level: payload.level,
+        duration: payload.duration,
+        goal: payload.goal,
+        fileContexts: fileContexts.map((file, index) => ({
+          name: file.name,
+          text: file.text,
+          size: files[index]?.size || 0,
+          type: files[index]?.type || "",
+        })),
+      });
+
+      const uploadFailures = await uploadCourseFiles(files, result.sourceUploads || []);
+      await refresh();
+
       return {
-        courseId: nextState.courses[0].id,
-        fallback: generated.fallback,
-        message: generated.fallback
-          ? generated.error
-            ? `Course created with local fallback content. Gemini issue: ${generated.error}`
-            : "Course created with local fallback content. Add VITE_GEMINI_API_KEY for real AI generation."
-          : "Course generated with Gemini.",
+        courseId: result.courseId,
+        fallback: result.fallback,
+        message: uploadFailures.length
+          ? `${result.message} Some original files could not be uploaded to storage.`
+          : result.message,
       };
     } catch (createError) {
       setError(createError.message);
@@ -70,36 +177,43 @@ export function LearningDataProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [refresh]);
 
   const updateModuleProgress = useCallback(async ({ courseId, moduleId, section = "practice", percent = 70 }) => {
-    setState((current) => {
-      const existing = current.progress.find((item) => item.module_id === moduleId);
-      const completedSections = new Set(normalizeArray(existing?.completed_sections));
-      completedSections.add(section);
+    if (!supabase || !session?.user) return;
+    const existing = state.progress.find((item) => item.module_id === moduleId);
+    const completedSections = new Set(normalizeArray(existing?.completed_sections));
+    completedSections.add(section);
 
-      const row = {
-        id: existing?.id || id("progress"),
-        user_id: localUserId,
-        course_id: courseId,
-        module_id: moduleId,
-        completed_sections: [...completedSections],
-        percent: Math.max(existing?.percent || 0, percent),
-        completed_at: percent >= 100 ? new Date().toISOString() : existing?.completed_at || null,
-        updated_at: new Date().toISOString(),
-      };
+    const row = {
+      id: existing?.id || id(),
+      user_id: session.user.id,
+      course_id: courseId,
+      module_id: moduleId,
+      completed_sections: [...completedSections],
+      percent: Math.max(existing?.percent || 0, percent),
+      completed_at: percent >= 100 ? new Date().toISOString() : existing?.completed_at || null,
+      updated_at: new Date().toISOString(),
+    };
 
-      return {
-        ...current,
-        progress: [row, ...current.progress.filter((item) => item.module_id !== moduleId)],
-      };
-    });
-  }, []);
+    const { data, error: progressError } = await supabase
+      .from("progress")
+      .upsert(row, { onConflict: "user_id,module_id" })
+      .select("*")
+      .single();
+    if (progressError) throw progressError;
+
+    setState((current) => ({
+      ...current,
+      progress: [data, ...current.progress.filter((item) => item.module_id !== moduleId)],
+    }));
+  }, [session, state.progress]);
 
   const saveQuizAttempt = useCallback(async ({ course, module, quiz, questions, answers }) => {
+    if (!supabase || !session?.user) throw new Error("Sign in again to save this quiz.");
+
     const incorrectTopics = [];
     let correctCount = 0;
-
     for (const question of questions) {
       if (answers[question.id] === question.correct_option_index) {
         correctCount += 1;
@@ -109,9 +223,9 @@ export function LearningDataProvider({ children }) {
     }
 
     const score = Math.round((correctCount / questions.length) * 100);
-    const attempt = {
-      id: id("attempt"),
-      user_id: localUserId,
+    const attemptRow = {
+      id: id(),
+      user_id: session.user.id,
       course_id: course.id,
       module_id: module.id,
       quiz_id: quiz.id,
@@ -123,87 +237,59 @@ export function LearningDataProvider({ children }) {
       created_at: new Date().toISOString(),
     };
 
+    const { data: attempt, error: attemptError } = await supabase.from("attempts").insert(attemptRow).select("*").single();
+    if (attemptError) throw attemptError;
+
+    const existing = state.progress.find((item) => item.module_id === module.id);
+    const progressRow = {
+      id: existing?.id || id(),
+      user_id: session.user.id,
+      course_id: course.id,
+      module_id: module.id,
+      completed_sections: score >= 60 ? ["lesson", "practice", "quiz"] : ["lesson", "practice"],
+      percent: score >= 60 ? 100 : Math.max(70, score),
+      completed_at: score >= 60 ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    };
+    const { data: progressRowSaved, error: progressError } = await supabase
+      .from("progress")
+      .upsert(progressRow, { onConflict: "user_id,module_id" })
+      .select("*")
+      .single();
+    if (progressError) throw progressError;
+
     setState((current) => ({
       ...current,
       attempts: [attempt, ...current.attempts],
-      progress: [
-        {
-          id: id("progress"),
-          user_id: localUserId,
-          course_id: course.id,
-          module_id: module.id,
-          completed_sections: score >= 60 ? ["lesson", "practice", "quiz"] : ["lesson", "practice"],
-          percent: score >= 60 ? 100 : Math.max(70, score),
-          completed_at: score >= 60 ? new Date().toISOString() : null,
-          updated_at: new Date().toISOString(),
-        },
-        ...current.progress.filter((item) => item.module_id !== module.id),
-      ],
+      progress: [progressRowSaved, ...current.progress.filter((item) => item.module_id !== module.id)],
     }));
 
     return attempt;
-  }, []);
+  }, [session, state.progress]);
 
   const askAi = useCallback(async ({ courseId, moduleId, message }) => {
-    const current = loadState();
-    const course = current.courses.find((item) => item.id === courseId);
-    const module = current.modules.find((item) => item.id === moduleId);
-    const lesson = current.lessons.find((item) => item.module_id === moduleId);
-    const history = current.messages.filter((item) => item.course_id === courseId && (!moduleId || item.module_id === moduleId)).slice(-8);
-    const answer = await answerLocalQuestion({ message, course, module, lesson, history });
-    const now = new Date().toISOString();
-
-    setState((latest) => ({
-      ...latest,
-      messages: [
-        ...latest.messages,
-        { id: id("msg"), user_id: localUserId, course_id: courseId, module_id: moduleId, role: "user", content: message, created_at: now },
-        { id: id("msg"), user_id: localUserId, course_id: courseId, module_id: moduleId, role: "assistant", content: answer, created_at: now },
-      ],
+    const result = await apiRequest("/api/ai/chat", { courseId, moduleId, message });
+    setState((current) => ({
+      ...current,
+      messages: [...current.messages, ...(result.messages || [])],
     }));
-
-    return { answer };
+    return { answer: result.answer };
   }, []);
 
   const loadVideosForModule = useCallback(async ({ course, module }) => {
-    const current = loadState();
+    const result = await apiRequest("/api/videos/search", { courseId: course.id, moduleId: module.id });
+    const videos = result.videos || [];
     const profile = buildModuleVideoSearchProfile({ course, module });
-    const cached = current.videos.filter((video) => video.module_id === module.id && video.query_signature === profile.signature);
-    if (cached.length) {
-      return { videos: cached, cached: true };
-    }
 
-    const videos = await searchYouTubeVideos({ course, module });
-    const now = new Date().toISOString();
-    const rows = videos.map((video) => ({
-      id: id("video"),
-      user_id: localUserId,
-      course_id: course.id,
-      module_id: module.id,
-      video_id: video.video_id,
-      title: video.title,
-      url: video.url,
-      thumbnail_url: video.thumbnail_url,
-      channel_title: video.channel_title,
-      source: video.source,
-      search_query: video.search_query || profile.query,
-      query_signature: video.query_signature || profile.signature,
-      match_score: video.match_score || 0,
-      duration_seconds: video.duration_seconds || 0,
-      created_at: now,
+    setState((current) => ({
+      ...current,
+      videos: [
+        ...current.videos.filter((video) => video.module_id !== module.id || video.query_signature !== profile.signature),
+        ...videos,
+      ],
     }));
 
-    setState((latest) => ({
-      ...latest,
-      videos: [...latest.videos.filter((video) => video.module_id !== module.id || video.query_signature !== profile.signature), ...rows],
-    }));
-
-    return { videos: rows, cached: false };
-  }, []);
-
-  const resetData = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
-    setState(emptyState);
+    return { videos, cached: result.cached };
   }, []);
 
   const value = useMemo(() => {
@@ -215,33 +301,37 @@ export function LearningDataProvider({ children }) {
       courses: decoratedCourses,
       modules: decoratedModules,
       raw: state,
+      user: session?.user || null,
+      session,
+      isSupabaseConfigured,
+      authLoading,
       loading,
       error,
       refresh,
+      signIn,
+      signUp,
+      signOut,
+      resetData: signOut,
       createCourse,
       updateModuleProgress,
       saveQuizAttempt,
       askAi,
       loadVideosForModule,
-      resetData,
       getCourse: (courseId) => decoratedCourses.find((course) => course.id === courseId),
-      getModules: (courseId) => decoratedModules.filter((module) => module.course_id === courseId),
+      getModules: (courseId) => decoratedModules.filter((module) => module.course_id === courseId).sort((a, b) => a.position - b.position),
       getModule: (moduleId) => decoratedModules.find((module) => module.id === moduleId),
       getLesson: (moduleId) => state.lessons.find((lesson) => lesson.module_id === moduleId),
       getVideos: (moduleId) => {
         const module = decoratedModules.find((item) => item.id === moduleId);
         const course = module ? decoratedCourses.find((item) => item.id === module.course_id) : null;
-        if (!module || !course) {
-          return [];
-        }
-
+        if (!module || !course) return [];
         const profile = buildModuleVideoSearchProfile({ course, module });
         return state.videos
           .filter((video) => video.module_id === moduleId && video.query_signature === profile.signature)
           .sort((a, b) => (b.match_score || 0) - (a.match_score || 0));
       },
       getQuizForModule: (moduleId) => state.quizzes.find((quiz) => quiz.module_id === moduleId),
-      getQuestions: (quizId) => state.questions.filter((question) => question.quiz_id === quizId),
+      getQuestions: (quizId) => state.questions.filter((question) => question.quiz_id === quizId).sort((a, b) => a.position - b.position),
       getLatestAttemptForQuiz: (quizId) => latestAttemptForQuiz(quizId, state),
       getLatestAttemptForModule: (moduleId) => latestAttemptForModule(moduleId, state),
       getCourseProgress: (courseId) => courseProgress(courseId, state),
@@ -252,7 +342,22 @@ export function LearningDataProvider({ children }) {
         return [...new Set(weakTopics)].slice(0, 8);
       },
     };
-  }, [askAi, createCourse, error, loadVideosForModule, loading, refresh, resetData, saveQuizAttempt, state, updateModuleProgress]);
+  }, [
+    askAi,
+    authLoading,
+    createCourse,
+    error,
+    loadVideosForModule,
+    loading,
+    refresh,
+    saveQuizAttempt,
+    session,
+    signIn,
+    signOut,
+    signUp,
+    state,
+    updateModuleProgress,
+  ]);
 
   return <LearningDataContext.Provider value={value}>{children}</LearningDataContext.Provider>;
 }
@@ -266,134 +371,32 @@ export function useLearningData() {
   return context;
 }
 
-function buildCourseState(current, course, payload, fileContexts) {
-  const now = new Date().toISOString();
-  const courseId = id("course");
-  const courseRow = {
-    id: courseId,
-    user_id: localUserId,
-    title: course.title,
-    description: course.description,
-    level: payload.level,
-    duration: payload.duration,
-    goal: payload.goal,
-    source_type: payload.files?.length ? "file" : "topic",
-    source_label: payload.topic || fileContexts.map((file) => file.name).join(", "),
-    source_file: fileContexts[0]?.name || null,
-    estimated_time: course.estimatedTime,
-    learning_outcomes: course.learningOutcomes,
-    weak_topics: [],
-    card_color: ["lavender", "peach", "lime"][current.courses.length % 3],
-    created_at: now,
-    updated_at: now,
-  };
+async function selectRows(table, userId, { order, ascending }) {
+  let query = supabase.from(table).select("*").eq("user_id", userId);
+  if (order) {
+    query = query.order(order, { ascending });
+  }
 
-  const modules = [];
-  const lessons = [];
-  const quizzes = [];
-  const questions = [];
-  const studyPlan = [];
-
-  course.modules.forEach((module, index) => {
-    const moduleId = id("module");
-    const quizId = id("quiz");
-    modules.push({
-      id: moduleId,
-      user_id: localUserId,
-      course_id: courseId,
-      position: index + 1,
-      title: module.title,
-      summary: module.summary,
-      explanation: module.explanation,
-      key_concepts: module.keyConcepts,
-      examples: module.examples,
-      practice_tasks: module.practiceTasks,
-      estimated_minutes: module.estimatedMinutes,
-      video_search_query: module.videoSearchQuery,
-      video_keywords: module.videoKeywords,
-      created_at: now,
-      updated_at: now,
-    });
-
-    lessons.push({
-      id: id("lesson"),
-      user_id: localUserId,
-      course_id: courseId,
-      module_id: moduleId,
-      content: module.explanation,
-      created_at: now,
-    });
-
-    quizzes.push({
-      id: quizId,
-      user_id: localUserId,
-      course_id: courseId,
-      module_id: moduleId,
-      title: module.quiz.title,
-      created_at: now,
-    });
-
-    module.quiz.questions.forEach((question, questionIndex) => {
-      questions.push({
-        id: id("question"),
-        user_id: localUserId,
-        course_id: courseId,
-        module_id: moduleId,
-        quiz_id: quizId,
-        position: questionIndex + 1,
-        prompt: question.prompt,
-        options: question.options,
-        correct_option_index: question.correctOptionIndex,
-        explanation: question.explanation,
-        topic: question.topic,
-        created_at: now,
-      });
-    });
-
-    studyPlan.push({
-      id: id("plan"),
-      user_id: localUserId,
-      course_id: courseId,
-      module_id: moduleId,
-      title: `Lecture ${index + 1}: ${module.title}`,
-      meta: `${module.estimatedMinutes} min lecture + quiz`,
-      kind: "lesson",
-      due_date: addDays(index),
-      completed: false,
-      created_at: now,
-    });
-  });
-
-  return {
-    ...current,
-    courses: [courseRow, ...current.courses],
-    sources: [
-      ...fileContexts.map((file) => ({
-        id: id("source"),
-        user_id: localUserId,
-        course_id: courseId,
-        kind: "file",
-        file_name: file.name,
-        text_excerpt: file.text.slice(0, 2000),
-        created_at: now,
-      })),
-      ...current.sources,
-    ],
-    modules: [...modules, ...current.modules],
-    lessons: [...lessons, ...current.lessons],
-    quizzes: [...quizzes, ...current.quizzes],
-    questions: [...questions, ...current.questions],
-    studyPlan: [...studyPlan, ...current.studyPlan],
-  };
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
 }
 
-function loadState() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-    return parsed ? migrateState({ ...emptyState, ...parsed }) : emptyState;
-  } catch {
-    return emptyState;
-  }
+async function uploadCourseFiles(files, uploadTargets) {
+  if (!supabase || !files.length || !uploadTargets.length) return [];
+  const failures = [];
+
+  await Promise.all(files.map(async (file, index) => {
+    const target = uploadTargets[index];
+    if (!target?.storagePath) return;
+
+    const { error } = await supabase.storage
+      .from("course-materials")
+      .upload(target.storagePath, file, { upsert: true });
+    if (error) failures.push({ file: file.name, error });
+  }));
+
+  return failures;
 }
 
 function migrateState(state) {
@@ -415,7 +418,6 @@ function migrateState(state) {
     const module = modulesById.get(moduleId);
     const course = module ? coursesById.get(module.course_id) : null;
     if (!module || !course) continue;
-
     for (const question of improveStoredQuestionsForModule({ course, module, questions })) {
       repairedQuestionsById.set(question.id, question);
     }
@@ -428,12 +430,6 @@ function migrateState(state) {
   };
 }
 
-function id(prefix) {
-  return `${prefix}-${crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
-}
-
-function addDays(days) {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
+function id() {
+  return crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }

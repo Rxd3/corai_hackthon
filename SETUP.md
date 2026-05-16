@@ -1,74 +1,99 @@
-# CorAI Local Test Setup
+# CorAI Production Setup
 
-CorAI is now in local-first test mode. It does not require Supabase, Vercel, login, serverless functions, or database setup.
+This project is prepared for Supabase + Vercel. You still need to create the third-party projects and add their keys before publishing.
 
-## Run Locally
+## 1. Supabase
+
+1. Create a Supabase project.
+2. Copy the Project URL to `VITE_SUPABASE_URL`.
+3. Copy the anon public key to `VITE_SUPABASE_ANON_KEY`.
+4. Copy the service role key to `SUPABASE_SERVICE_ROLE_KEY`.
+5. Enable Email Auth.
+6. Run `supabase/migrations/20260517000000_initial_backend.sql` in the Supabase SQL editor or through the Supabase CLI.
+7. Confirm the private `course-materials` bucket exists.
+8. Add redirect URLs:
+
+```text
+http://127.0.0.1:5173/*
+http://localhost:5173/*
+https://your-vercel-preview-url.vercel.app/*
+https://your-vercel-production-url.vercel.app/*
+```
+
+## 2. Gemini
+
+1. Create or renew a Gemini API key in Google AI Studio.
+2. Add it to `.env.local` locally and Vercel in production as:
+
+```env
+GEMINI_API_KEY=
+```
+
+Do not use a `VITE_` Gemini key.
+
+## 3. YouTube Data API
+
+1. Open Google Cloud Console.
+2. Enable **YouTube Data API v3**.
+3. Create an API key.
+4. Restrict the key to YouTube Data API v3.
+5. Add it to `.env.local` locally and Vercel in production as:
+
+```env
+YOUTUBE_API_KEY=
+```
+
+Do not use a `VITE_` YouTube key.
+
+## 4. Local Run
+
+Create `.env.local`:
+
+```env
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+GEMINI_API_KEY=
+YOUTUBE_API_KEY=
+APP_ORIGIN=http://127.0.0.1:5173
+```
+
+Then run:
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open the URL Vite prints, usually:
+## 5. Vercel
 
-```text
-http://127.0.0.1:5173
+1. Import the GitHub repo into Vercel.
+2. Set build command to `npm run build`.
+3. Set output directory to `dist`.
+4. Add these environment variables:
+
+```env
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+GEMINI_API_KEY=
+YOUTUBE_API_KEY=
+APP_ORIGIN=https://your-vercel-url.vercel.app
 ```
 
-## Optional Gemini AI
+5. Deploy a beta preview.
+6. Add the preview URL to Supabase Auth redirects.
+7. Test auth, course creation, uploads, videos, chat, quizzes, and refresh persistence.
+8. Promote to production when the beta works.
 
-To test real AI generation locally, create `.env.local`:
+## 6. Before Pushing
+
+Run:
 
 ```bash
-VITE_GEMINI_API_KEY=your_gemini_api_key
+npm run build
+git status --short --ignored
+git check-ignore -v .env.local dist/
 ```
 
-If you already have this from the earlier backend setup, it also works:
-
-```bash
-GEMINI_API_KEY=your_gemini_api_key
-```
-
-Then restart:
-
-```bash
-npm run dev
-```
-
-If both Gemini keys are missing or Gemini fails, the app still works with local fallback course content.
-
-## Optional YouTube Videos
-
-To load real lesson videos locally, add one of these to `.env.local`:
-
-```bash
-VITE_YOUTUBE_API_KEY=your_youtube_api_key
-```
-
-or, if you already have the earlier backend variable:
-
-```bash
-YOUTUBE_API_KEY=your_youtube_api_key
-```
-
-Then restart `npm run dev`. In Google Cloud, enable **YouTube Data API v3** for that key. For local browser testing, either leave the key unrestricted while testing or allow HTTP referrers for `http://127.0.0.1:5173/*` and `http://localhost:5173/*`.
-
-## What Works Locally
-
-- Create course from a topic.
-- Upload TXT, Markdown, DOCX, and PPTX materials for local text extraction.
-- Generate lessons, key concepts, examples, practice tasks, and quizzes.
-- Save a generated course only after subject-matched non-Shorts YouTube videos are found for every lesson.
-- Ask CorAI questions about the current course/lesson.
-- Take quizzes, save attempts, track progress, weak topics, and study plan.
-- All data is saved in browser `localStorage`.
-
-## Current Local Limitations
-
-- PDF text extraction is not enabled in browser-only mode.
-- YouTube lookup is required before a new course is saved, and Shorts are filtered out.
-- Do not deploy this local Gemini-key version publicly because `VITE_GEMINI_API_KEY` is exposed to the browser.
-
-## Later: Supabase + Vercel
-
-Once the local product flow feels good, add a backend again so API keys and uploaded files are private. The current app deliberately avoids Supabase/Vercel while you test the learning flow.
+Do not commit `.env.local`, `dist/`, `.vercel/`, `node_modules/`, or any real API key.

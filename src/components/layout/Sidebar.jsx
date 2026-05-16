@@ -5,7 +5,7 @@ import {
   Home,
   MessageCircleQuestion,
   PlusCircle,
-  RotateCcw,
+  LogOut,
   Settings,
 } from "lucide-react";
 import { navItems } from "../../lib/navItems";
@@ -69,8 +69,8 @@ export function Sidebar({ activePage, onNavigate, onLogout }) {
         onClick={onLogout}
         className="focus-ring mt-8 flex min-h-12 items-center gap-3 rounded-2xl px-4 text-sm font-bold text-muted transition hover:bg-white hover:text-navy"
       >
-        <RotateCcw size={19} />
-        Reset demo
+        <LogOut size={19} />
+        Sign out
       </button>
     </aside>
   );

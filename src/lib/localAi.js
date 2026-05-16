@@ -1,7 +1,3 @@
-import JSZip from "jszip";
-import mammoth from "mammoth";
-
-const GEMINI_MODEL = "gemini-2.5-flash";
 const VIDEO_SEARCH_VERSION = "module-video-v3";
 const MIN_LESSON_VIDEO_SECONDS = 240;
 const MAX_LESSON_VIDEO_SECONDS = 1500;
@@ -53,15 +49,6 @@ export async function generateLocalCourse({ topic, files = [], level, duration, 
   const fileContexts = await Promise.all(files.map(extractLocalFileContext));
   const materialText = fileContexts.map((file) => `File: ${file.name}\n${file.text}`).join("\n\n").trim();
 
-  if (hasGeminiKey()) {
-    try {
-      const generated = await generateGeminiCourse({ topic, materialText, level, duration, goal });
-      return { course: normalizeCourse(generated), fallback: false, fileContexts };
-    } catch (error) {
-      return { course: fallbackCourse({ topic, materialText, level, duration, goal }), fallback: true, fileContexts, error: error.message };
-    }
-  }
-
   return { course: fallbackCourse({ topic, materialText, level, duration, goal }), fallback: true, fileContexts };
 }
 
@@ -74,43 +61,7 @@ export async function answerLocalQuestion({ message, course, module, lesson, his
     .filter(Boolean)
     .join("\n\n");
 
-  if (!hasGeminiKey()) {
-    return buildLocalLectureAnswer({ message, course, module, lesson, reason: "Gemini is not configured yet." });
-  }
-
-  const prompt = `
-You are CorAI, a concise study assistant.
-Use the course context and answer like a helpful tutor.
-Start directly with the answer. Do not use greetings like "Hey there", "Hi", or "Sure".
-Keep the answer focused on the current lecture only.
-Use short paragraphs and bullet lists when they make the answer easier to scan.
-Avoid markdown tables, decorative headings, and long full-course explanations.
-
-Recent chat:
-${history.map((item) => `${item.role}: ${item.content}`).join("\n")}
-
-Course context:
-${context.slice(0, 12000)}
-
-Student question:
-${message}
-`;
-
-  try {
-    return cleanTutorAnswer(await generateGeminiText(prompt));
-  } catch (error) {
-    if (isGeminiKeyError(error)) {
-      return buildLocalLectureAnswer({
-        message,
-        course,
-        module,
-        lesson,
-        reason: "Gemini is unavailable right now.",
-      });
-    }
-
-    throw error;
-  }
+  return buildLocalLectureAnswer({ message, course, module, lesson, history, context, reason: "server AI is unavailable in this browser-only fallback." });
 }
 
 function cleanTutorAnswer(answer) {
@@ -201,62 +152,7 @@ export function improveStoredModuleForCourse({ course, module }) {
 }
 
 export async function searchYouTubeVideos(input) {
-  if (!hasYouTubeKey()) {
-    throw new Error("Add YOUTUBE_API_KEY or VITE_YOUTUBE_API_KEY to .env.local, then restart npm run dev.");
-  }
-
-  const profile = typeof input === "string" ? buildVideoSearchProfileFromQuery(input) : buildModuleVideoSearchProfile(input);
-  const params = new URLSearchParams({
-    key: import.meta.env.VITE_YOUTUBE_API_KEY,
-    part: "snippet",
-    q: buildYouTubeQuery(profile.query),
-    maxResults: "12",
-    order: "relevance",
-    relevanceLanguage: "en",
-    regionCode: "US",
-    type: "video",
-    safeSearch: "strict",
-    videoEmbeddable: "true",
-    videoDuration: "medium",
-  });
-
-  const response = await fetch(`https://www.googleapis.com/youtube/v3/search?${params.toString()}`);
-  const payload = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(payload?.error?.message || "YouTube search failed");
-  }
-
-  const candidates = (payload.items || [])
-    .filter((item) => item.id?.videoId)
-    .map((item) => ({
-      video_id: item.id.videoId,
-      title: item.snippet?.title || "Recommended video",
-      url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
-      thumbnail_url: item.snippet?.thumbnails?.medium?.url || item.snippet?.thumbnails?.default?.url || "",
-      channel_title: item.snippet?.channelTitle || "YouTube",
-      description: item.snippet?.description || "",
-      source: "youtube",
-    }));
-
-  const durations = await loadYouTubeDurations(candidates.map((video) => video.video_id));
-
-  const ranked = uniqueVideos(candidates)
-    .map((video) => {
-      const durationSeconds = durations.get(video.video_id) || 0;
-      return {
-        ...video,
-        duration_seconds: durationSeconds,
-        search_query: profile.query,
-        query_signature: profile.signature,
-        match_score: scoreVideoMatch(video, profile, durationSeconds),
-      };
-    })
-    .filter((video) => isAcceptableLessonVideo(video))
-    .sort((a, b) => b.match_score - a.match_score)
-    .slice(0, 3);
-
-  return ranked.map(({ description, ...video }) => video);
+  throw new Error("YouTube search now runs through the server API after sign-in.");
 }
 
 async function generateGeminiCourse({ topic, materialText, level, duration, goal }) {
@@ -330,43 +226,18 @@ Rules:
 }
 
 async function generateGeminiText(prompt, json = false) {
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": import.meta.env.VITE_GEMINI_API_KEY,
-    },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.35,
-        responseMimeType: json ? "application/json" : "text/plain",
-      },
-    }),
-  });
-
-  const payload = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(payload?.error?.message || "Gemini request failed");
-  }
-
-  const text = payload?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("").trim();
-  if (!text) {
-    throw new Error("Gemini returned an empty response");
-  }
-
-  return text;
+  throw new Error("Gemini generation now runs through the server API after sign-in.");
 }
 
-async function extractLocalFileContext(file) {
+export async function extractLocalFileContext(file) {
   const extension = file.name.split(".").pop()?.toLowerCase();
 
-  if (["txt", "md", "csv"].includes(extension)) {
+  if (["txt", "md", "markdown", "csv"].includes(extension)) {
     return { name: file.name, text: await file.text() };
   }
 
   if (extension === "docx") {
+    const mammoth = await loadMammoth();
     const result = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
     return { name: file.name, text: result.value || "" };
   }
@@ -382,6 +253,7 @@ async function extractLocalFileContext(file) {
 }
 
 async function extractPptxText(arrayBuffer) {
+  const JSZip = await loadJSZip();
   const zip = await JSZip.loadAsync(arrayBuffer);
   const slideEntries = Object.keys(zip.files)
     .filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
@@ -638,11 +510,21 @@ function isWeakQuestionSet(questions, moduleTitle = "") {
 }
 
 function hasGeminiKey() {
-  return Boolean(import.meta.env?.VITE_GEMINI_API_KEY);
+  return false;
+}
+
+async function loadMammoth() {
+  const module = await import("mammoth");
+  return module.default || module;
+}
+
+async function loadJSZip() {
+  const module = await import("jszip");
+  return module.default || module;
 }
 
 function hasYouTubeKey() {
-  return Boolean(import.meta.env?.VITE_YOUTUBE_API_KEY);
+  return false;
 }
 
 function cleanJson(text) {
@@ -816,25 +698,7 @@ function buildVideoSearchProfileFromQuery(queryValue) {
 }
 
 async function loadYouTubeDurations(videoIds) {
-  const uniqueIds = [...new Set(videoIds.filter(Boolean))];
-  if (!uniqueIds.length) {
-    return new Map();
-  }
-
-  const params = new URLSearchParams({
-    key: import.meta.env.VITE_YOUTUBE_API_KEY,
-    part: "contentDetails",
-    id: uniqueIds.join(","),
-  });
-
-  const response = await fetch(`https://www.googleapis.com/youtube/v3/videos?${params.toString()}`);
-  const payload = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    return new Map();
-  }
-
-  return new Map((payload.items || []).map((item) => [item.id, parseIsoDuration(item.contentDetails?.duration)]));
+  return new Map();
 }
 
 function scoreVideoMatch(video, profile, durationSeconds) {

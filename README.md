@@ -1,44 +1,33 @@
 # CorAI
 
-CorAI is a local-first AI course builder for students. A learner can type a topic or upload class materials, and CorAI turns that input into a structured course with lectures, explanations, key concepts, examples, practice tasks, embedded quizzes, YouTube video lectures, progress tracking, study plans, and AI lecture chat.
+CorAI is an AI course builder that turns a topic or uploaded materials into a private, structured learning path with lectures, explanations, practice tasks, embedded quizzes, YouTube recommendations, progress tracking, study plans, and lecture-specific AI chat.
 
-The current version is designed for fast product validation. It runs as a frontend-only Vite app and stores learning data in the browser with `localStorage`. It does not currently require Supabase, Vercel, auth, serverless functions, or a database.
+The app is now prepared for a production-style Vercel + Supabase deployment. The UI says **lectures**; internal database and route names still use `modules` in places for compatibility.
 
 ## Current Status
 
-- Frontend-only React/Vite app.
-- Local browser persistence through `localStorage`.
-- User-facing terminology is `lecture` / `lectures`.
-- Internal code and routes still use `module` names in places for compatibility with saved data and existing route paths.
+- React/Vite frontend.
+- Supabase Auth with email/password accounts.
+- Supabase Postgres persistence instead of browser-only `localStorage`.
+- Supabase Row Level Security so each user can access only their own data.
+- Private Supabase Storage bucket for uploaded course materials.
+- Vercel serverless API routes for Gemini, YouTube, and course generation.
+- Gemini and YouTube keys are server-only and must not use `VITE_` names.
 - `.env.local`, `dist/`, `.vercel/`, and `node_modules/` are ignored and should not be pushed.
-- Production hardening still needs a backend for private API keys.
 
 ## Features
 
-- Create a course from either uploaded materials or a topic.
-- Upload TXT, Markdown, DOCX, and PPTX materials for browser-side text extraction.
-- Choose shared course settings:
-  - Course Level: Beginner, Intermediate, Advanced
-  - Study Duration: 1 Week, 1 Month, 3 Months
-  - Goal: Exam Preparation, Full Course, Quick Revision
-- Generate structured lectures with:
-  - Short explanation
-  - Key concepts
-  - Examples
-  - Practice tasks
-  - Lecture-specific quizzes
-  - YouTube video search queries
-- Recommend YouTube videos per lecture, not one broad full-course video.
-- Filter and rank YouTube results to avoid Shorts, playlists, broad crash courses, and very long videos.
-- Cache video results per lecture search signature so stale broad matches are refreshed.
+- Sign up, sign in, and sign out.
+- Create a course from uploaded TXT, Markdown, DOCX, PPTX, or a typed topic.
+- Choose course level, study duration, and goal.
+- Generate sequential lectures with real course structure.
+- Generate module/lecture-specific explanations, examples, practice tasks, and quizzes.
+- Recommend lecture-specific YouTube videos while filtering Shorts, playlists, broad full courses, and overly long videos.
 - Take quizzes inside the lecture page after practice is complete.
-- Show quiz score, correct count, explanations, weak topics, retake, and review actions inline.
-- Navigate to previous and next lectures from the lecture page.
-- Ask CorAI directly under the Short Explanation section for lecture-specific help.
-- Render AI replies with readable paragraphs, bullet lists, dark text, and bold markdown like `**important text**`.
-- Strip chatty AI greetings such as `Hey there` so replies jump straight into the answer.
-- Repair older localStorage quiz questions that look like placeholders.
-- Track progress, quiz attempts, weak topics, and study plan items locally.
+- Show inline quiz scores, explanations, weak topics, retake, and review actions.
+- Ask CorAI about the current lecture directly under the Short Explanation section.
+- Render AI replies with paragraphs, bullets, and bold markdown.
+- Keep old quiz URLs as compatibility redirects/fallbacks.
 
 ## Tech Stack
 
@@ -47,13 +36,14 @@ The current version is designed for fast product validation. It runs as a fronte
 - React Router
 - Tailwind CSS
 - Lucide icons
-- Gemini API for AI course generation and lecture chat
-- YouTube Data API v3 for video recommendations
-- `localStorage` for local persistence
-- `mammoth` for DOCX extraction
-- `jszip` for PPTX extraction
+- Supabase Auth, Postgres, Storage
+- Vercel serverless functions under `api/`
+- Gemini API
+- YouTube Data API v3
+- `mammoth` for DOCX text extraction
+- `jszip` for PPTX text extraction
 
-## Running Locally
+## Local Development
 
 Install dependencies:
 
@@ -61,7 +51,19 @@ Install dependencies:
 npm install
 ```
 
-Start the dev server:
+Create `.env.local` from `.env.example`:
+
+```env
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+
+SUPABASE_SERVICE_ROLE_KEY=
+GEMINI_API_KEY=
+YOUTUBE_API_KEY=
+APP_ORIGIN=http://127.0.0.1:5173
+```
+
+Run the app:
 
 ```bash
 npm run dev
@@ -79,112 +81,73 @@ Build:
 npm run build
 ```
 
-## Environment Variables
+## Supabase Setup
 
-Create `.env.local` in the project root. This file is ignored by Git.
+1. Create a Supabase project.
+2. Copy the Project URL into `VITE_SUPABASE_URL`.
+3. Copy the anon public key into `VITE_SUPABASE_ANON_KEY`.
+4. Copy the service role key into `SUPABASE_SERVICE_ROLE_KEY`.
+5. Enable Email Auth in Supabase Authentication.
+6. Run the SQL migration in `supabase/migrations/20260517000000_initial_backend.sql`.
+7. Confirm the private Storage bucket `course-materials` exists. The migration creates it.
+8. Add Auth redirect URLs:
 
-For Gemini course generation and lecture chat:
-
-```env
-VITE_GEMINI_API_KEY=your_gemini_api_key
+```text
+http://127.0.0.1:5173/*
+http://localhost:5173/*
+https://your-vercel-preview-url.vercel.app/*
+https://your-vercel-production-url.vercel.app/*
 ```
 
-The app also accepts the older backend-style name:
+## Google Gemini Setup
 
-```env
-GEMINI_API_KEY=your_gemini_api_key
-```
+1. Create or renew a Gemini API key in Google AI Studio.
+2. Store it only as `GEMINI_API_KEY`.
+3. Do not create `VITE_GEMINI_API_KEY` for production.
 
-For YouTube lecture recommendations:
+## YouTube API Setup
 
-```env
-VITE_YOUTUBE_API_KEY=your_youtube_api_key
-```
+1. In Google Cloud, enable **YouTube Data API v3**.
+2. Create an API key.
+3. Restrict the key to YouTube Data API v3.
+4. Store it only as `YOUTUBE_API_KEY`.
+5. Do not create `VITE_YOUTUBE_API_KEY` for production.
 
-or:
+## Vercel Deployment
 
-```env
-YOUTUBE_API_KEY=your_youtube_api_key
-```
-
-After changing `.env.local`, restart `npm run dev`.
-
-Important: this is a local test setup. Vite exposes client-side environment variables in the browser bundle, and this project maps the non-`VITE_` local key names into the browser for testing convenience. Do not deploy this local-key version publicly.
-
-## API Key And Git Safety
-
-- Do not commit `.env.local`.
-- Do not commit `dist/`.
-- Do not push built assets that may contain bundled API keys.
-- Keep real keys out of screenshots, logs, commits, and zipped project folders.
-- If a real key was ever pushed or shared, rotate it in the provider dashboard.
-
-Useful checks before pushing:
+1. Import the GitHub repo into Vercel.
+2. Set the build command:
 
 ```bash
-git status --short --ignored
-git check-ignore -v .env.local dist/
+npm run build
 ```
 
-Expected ignored local items include:
+3. Set the output directory:
 
 ```text
-.env.local
-dist/
-node_modules/
-.vercel/
+dist
 ```
 
-## Project Structure
+4. Add environment variables in Vercel:
 
-```text
-src/
-  App.jsx                         Routes and local shell wiring
-  main.jsx                        React entrypoint
-  index.css                       Tailwind layers and shared visual classes
-
-  contexts/
-    LearningDataContext.jsx       Local data store, persistence, app actions
-
-  lib/
-    localAi.js                    Gemini calls, YouTube search, file extraction, fallback generation
-    learningTransforms.js         Converts stored rows into UI-friendly course/progress data
-    navItems.js                   Sidebar/mobile navigation config
-    classNames.js                 CSS class join helper
-
-  pages/
-    DashboardPage.jsx             Overview, stats, recommended tasks
-    CreateCoursePage.jsx          Upload/topic course creation flow
-    MyCoursesPage.jsx             Course list, search, filter
-    CourseDetailsPage.jsx         Course overview, outcomes, roadmap, lecture cards
-    ModuleLessonPage.jsx          Lecture page, video, explanation chat, practice, embedded quiz
-    QuizPage.jsx                  Compatibility redirect to embedded lecture quiz
-    QuizResultPage.jsx            Compatibility redirect to embedded lecture result
-    ProgressTrackingPage.jsx      Progress overview and table
-    StudyPlanPage.jsx             Local generated study schedule
-    AskAIPage.jsx                 Course-scoped AI chat page
-    SettingsPage.jsx              Settings cards
-
-  components/
-    layout/                       Sidebar, top bar, mobile nav, app shell
-    ui/                           Shared buttons, cards, headers, progress/status components
-    dashboard/                    Dashboard cards
-    createCourse/                 Upload/topic/settings components
-    course/                       Course header, roadmap, outcomes, lecture cards
-    module/                       Lecture video, explanation chat, examples, practice, quiz
-    quiz/                         Quiz question/result cards
-    progress/                     Progress overview/table/charts
+```env
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+GEMINI_API_KEY=
+YOUTUBE_API_KEY=
+APP_ORIGIN=https://your-vercel-url.vercel.app
 ```
+
+5. Deploy a beta preview first.
+6. Add the preview URL to Supabase Auth redirect URLs.
+7. Test signup, signin, course creation, videos, lecture chat, quizzes, and persistence.
+8. Promote to production after testing.
+9. Add a custom domain later if needed.
 
 ## Data Model
 
-The app keeps normalized local records in `localStorage` under:
-
-```text
-corai.local.v1
-```
-
-Stored record groups include:
+Supabase tables:
 
 - `courses`
 - `sources`
@@ -195,131 +158,71 @@ Stored record groups include:
 - `questions`
 - `attempts`
 - `progress`
-- `studyPlan`
+- `study_plan`
 - `messages`
 
-Note: the UI says "lecture", but some internal storage keys are still named `modules` and `lessons`. This is intentional for compatibility with the existing app logic and saved local data.
+Each table includes `user_id` and has RLS policies that allow users to manage only their own rows.
 
-## Course Generation Flow
+Uploaded course files are stored in the private `course-materials` bucket under:
 
-1. `CreateCoursePage` collects topic/materials, level, duration, and goal.
-2. `LearningDataContext.createCourse()` calls `generateLocalCourse()` from `localAi.js`.
-3. `localAi.js` extracts supported file text in the browser.
-4. If Gemini is configured, the app asks Gemini for structured course JSON.
-5. If Gemini is missing or fails, the app generates local fallback content.
-6. The course is normalized into local rows for courses, lectures/modules, quizzes, questions, and study plan items.
-7. Records are saved in `localStorage`.
-8. Pages read from `LearningDataContext` and decorate rows for display.
+```text
+{user_id}/{course_id}/{file_id}-{safe_filename}
+```
 
-## YouTube Video Behavior
+## Server APIs
 
-YouTube search is lazy: it runs when a learner opens a lecture, not during course creation.
+- `POST /api/courses/generate`
+  - Requires Supabase Auth bearer token.
+  - Calls Gemini server-side.
+  - Creates courses, lectures/modules, lessons, quizzes, questions, sources, and study plan rows.
+  - Returns `{ courseId }` and file upload targets.
 
-Each lecture stores or derives:
+- `POST /api/ai/chat`
+  - Requires auth.
+  - Loads course and lecture context from Supabase.
+  - Calls Gemini server-side.
+  - Saves user and assistant messages.
 
-- `video_search_query`
-- `video_keywords`
-- a query signature used for cache freshness
+- `POST /api/videos/search`
+  - Requires auth.
+  - Loads lecture-specific video search data.
+  - Calls YouTube server-side.
+  - Filters and ranks videos.
+  - Stores cached rows with `query_signature`.
 
-The app searches more candidates, loads durations, ranks locally, and prefers:
+## Git And Secret Safety
 
-- lecture-title matches
-- key-concept matches
-- beginner/introduction videos for the first lecture
-- medium-length embeddable videos
+- Do not commit `.env.local`.
+- Do not commit `dist/`.
+- Do not push real API keys, Supabase service role keys, screenshots containing keys, or logs containing keys.
+- Use only these public browser variables:
+  - `VITE_SUPABASE_URL`
+  - `VITE_SUPABASE_ANON_KEY`
+- Keep these server-only:
+  - `SUPABASE_SERVICE_ROLE_KEY`
+  - `GEMINI_API_KEY`
+  - `YOUTUBE_API_KEY`
 
-The app penalizes or filters:
-
-- Shorts
-- playlists
-- full course / complete course / crash course
-- bootcamp / masterclass / all-in-one
-- very short videos
-- very long videos
-
-If no YouTube key exists, the lecture page shows the setup message instead of crashing.
-
-## Quiz Behavior
-
-- Quizzes are embedded inside each lecture page.
-- The learner finishes practice, then presses `Take Quiz`.
-- Questions appear one at a time.
-- `Submit Quiz` appears only on the last question.
-- `Next` disappears on the last question.
-- Submitting stays on the same lecture page.
-- The result shows score, correct count, weak topics, explanations, retake, and review actions.
-- Passing attempts update lecture progress to complete.
-- Old placeholder-looking questions are repaired automatically on state load.
-- Old quiz routes are kept as redirects/fallbacks so older links do not crash.
-
-## Lecture Chat Behavior
-
-The Short Explanation card includes an inline chat for questions about the current lecture.
-
-Quick actions:
-
-- Explain simpler
-- Give example
-- Summarize
-
-Chat rendering supports:
-
-- paragraphs
-- bullet lists
-- bold markdown with `**text**` and `__text__`
-- darker assistant reply text for readability
-
-The tutor prompt tells Gemini to:
-
-- answer only about the current lecture
-- start directly with the answer
-- avoid greetings like `Hey there`
-- avoid full-course explanations
-- use short paragraphs and bullets
-
-If Gemini is missing, expired, or invalid, CorAI falls back to saved lecture content instead of showing raw API errors.
-
-## Local Limitations
-
-- PDF text extraction is not enabled in browser-only mode.
-- There is no real user account system yet.
-- Data is saved only in the current browser.
-- API keys used in this local mode are exposed to the browser.
-- The main bundle currently triggers Vite's non-blocking `chunk size` warning.
-
-## Validation
-
-Current checks used before this handoff:
+Useful checks before pushing:
 
 ```bash
+git status --short --ignored
+git check-ignore -v .env.local dist/
 npm run build
 ```
 
-Rendered smoke test coverage:
+## Production Test Checklist
 
-- Dashboard loads.
-- Course details page loads.
-- Lecture labels render correctly.
-- Lecture page loads.
-- YouTube video path works with a mocked non-Shorts video.
-- Lecture chat strips greetings and renders bold markdown.
-- Practice completion unlocks quiz.
-- Embedded quiz flow works.
-- `Submit Quiz` is hidden before the final question.
-- `Next` is hidden on the final question.
-- Inline quiz result displays the score.
-- Next Lecture navigation appears.
-
-## Future Backend Direction
-
-When the product flow is stable, the next production stage should move sensitive work to a backend:
-
-- Supabase auth and private user data.
-- Supabase Storage for uploaded files.
-- Server-side Gemini calls so API keys are private.
-- Server-side YouTube lookup and caching.
-- Postgres tables for courses, lectures/modules, quizzes, progress, chat history, and uploaded material chunks.
-- Optional vector search/RAG for Ask CorAI over uploaded documents.
-- Optional code-splitting to reduce the frontend bundle size.
-
-This local version is the fast product-validation layer before backend hardening.
+- Sign up, sign in, sign out, and route protection.
+- User A cannot read User B courses, attempts, messages, progress, or files.
+- Topic-based course creation works.
+- TXT, Markdown, DOCX, and PPTX uploads work.
+- Gemini failure creates fallback course content instead of crashing.
+- Lecture videos load through `/api/videos/search`.
+- Shorts and broad full-course videos are avoided when better lecture-specific videos exist.
+- Lecture chat calls `/api/ai/chat`.
+- AI replies render bold text and bullets correctly.
+- Quiz submit appears only on the last question.
+- Quiz results show inline and persist after refresh.
+- Progress and study plan data persist after refresh.
+- Built assets do not contain server-only keys.

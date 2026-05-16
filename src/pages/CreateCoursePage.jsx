@@ -109,7 +109,7 @@ export function CreateCoursePage() {
                   ref={inputRef}
                   type="file"
                   multiple
-                  accept=".pdf,.docx,.pptx,.txt,.md"
+                  accept=".docx,.pptx,.txt,.md,.markdown"
                   className="hidden"
                   onChange={(event) => handleFiles(event.target.files)}
                 />
@@ -128,7 +128,7 @@ export function CreateCoursePage() {
                   </span>
                   <span className="mt-5 block text-lg font-extrabold text-ink">Drop your materials here</span>
                   <span className="mt-2 block text-sm font-bold text-muted">
-                    {files.length ? `${files.length} file${files.length === 1 ? "" : "s"} selected` : "or browse PDF, DOCX, PPTX, TXT, or Markdown files"}
+                    {files.length ? `${files.length} file${files.length === 1 ? "" : "s"} selected` : "or browse DOCX, PPTX, TXT, or Markdown files"}
                   </span>
                 </button>
                 {files.length ? (

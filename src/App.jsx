@@ -3,6 +3,7 @@ import { AppShell } from "./components/layout/AppShell";
 import { LearningDataProvider, useLearningData } from "./contexts/LearningDataContext";
 import { pathByNavId } from "./lib/navItems";
 import { AskAIPage, AskAIRightPanel } from "./pages/AskAIPage";
+import { AuthPage } from "./pages/AuthPage";
 import { CourseDetailsPage, CourseDetailsRightPanel } from "./pages/CourseDetailsPage";
 import { CreateCoursePage, CreateCourseRightPanel } from "./pages/CreateCoursePage";
 import { DashboardPage, DashboardRightPanel } from "./pages/DashboardPage";
@@ -14,17 +15,12 @@ import { QuizResultPage } from "./pages/QuizResultPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { StudyPlanPage, StudyPlanRightPanel } from "./pages/StudyPlanPage";
 
-const localUser = {
-  email: "local@corai.test",
-  user_metadata: { full_name: "Local Tester" },
-};
-
 function LoadingScreen() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-shell px-4 text-ink">
       <div className="rounded-[28px] bg-white p-7 text-center shadow-soft">
         <p className="text-lg font-extrabold text-navy">Loading CorAI...</p>
-        <p className="mt-2 text-sm font-semibold text-muted">Preparing your local learning workspace.</p>
+        <p className="mt-2 text-sm font-semibold text-muted">Preparing your learning workspace.</p>
       </div>
     </main>
   );
@@ -32,31 +28,35 @@ function LoadingScreen() {
 
 function ShellRoute({ activePage, rightPanel, children }) {
   const navigate = useNavigate();
-  const { resetData } = useLearningData();
+  const { signOut, user } = useLearningData();
 
   function handleNavigate(pageId) {
     navigate(pathByNavId[pageId] || "/");
   }
 
-  function handleReset() {
-    if (window.confirm("Clear all local CorAI demo data?")) {
-      resetData();
+  async function handleLogout() {
+    if (window.confirm("Sign out of CorAI?")) {
+      await signOut();
       navigate("/");
     }
   }
 
   return (
-    <AppShell activePage={activePage} onNavigate={handleNavigate} rightPanel={rightPanel} user={localUser} onLogout={handleReset}>
+    <AppShell activePage={activePage} onNavigate={handleNavigate} rightPanel={rightPanel} user={user} onLogout={handleLogout}>
       {children}
     </AppShell>
   );
 }
 
 function AppRoutes() {
-  const { loading } = useLearningData();
+  const { authLoading, isSupabaseConfigured, user } = useLearningData();
 
-  if (loading) {
+  if (authLoading) {
     return <LoadingScreen />;
+  }
+
+  if (!isSupabaseConfigured || !user) {
+    return <AuthPage />;
   }
 
   return (
