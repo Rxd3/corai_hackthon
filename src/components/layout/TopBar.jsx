@@ -9,7 +9,7 @@ export function TopBar({ user }) {
         <Search size={18} className="text-muted" />
         <input
           className="w-full bg-transparent text-sm font-semibold text-ink outline-none placeholder:text-muted"
-          placeholder="Search for a course, module, quiz, or topic..."
+          placeholder="Search for a course, lesson, quiz, or topic..."
         />
       </label>
 

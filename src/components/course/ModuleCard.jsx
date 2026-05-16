@@ -8,7 +8,7 @@ export function ModuleCard({ module, onOpen }) {
     <article className="soft-card flex flex-col p-5 transition hover:-translate-y-1 hover:shadow-soft">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-extrabold uppercase tracking-normal text-muted">Module {module.number}</p>
+          <p className="text-xs font-extrabold uppercase tracking-normal text-muted">Lesson {module.number}</p>
           <h3 className="mt-1 text-xl font-extrabold text-ink">{module.title}</h3>
         </div>
         <StatusPill status={module.status} />
@@ -42,7 +42,7 @@ export function ModuleCard({ module, onOpen }) {
       </div>
 
       <Button className="mt-6" onClick={onOpen}>
-        Open Module
+        Open Lesson
       </Button>
     </article>
   );

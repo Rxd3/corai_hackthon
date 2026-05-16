@@ -28,7 +28,7 @@ export function CourseCard({ course, onOpen, compact = false }) {
       <div className={cn("flex-1", compact ? "mt-3" : "mt-5")}>
         <h3 className={cn("break-words font-extrabold leading-tight", compact ? "text-base" : "text-lg")}>{course.title}</h3>
         <p className="mt-2 text-xs font-bold leading-4 opacity-75">
-          {course.modules} modules | {course.progress}%
+          {course.modules} lessons | {course.progress}%
         </p>
         <p className="mt-1 text-xs font-semibold opacity-70">{course.source}</p>
       </div>

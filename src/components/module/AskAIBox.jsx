@@ -39,7 +39,7 @@ export function AskAIBox({ courseId, moduleId }) {
           value={message}
           onChange={(event) => setMessage(event.target.value)}
           className="focus-ring w-full rounded-2xl border border-divider bg-gray-50 px-4 py-3 text-sm font-semibold outline-none placeholder:text-muted focus:bg-white"
-          placeholder="Ask about this module..."
+          placeholder="Ask about this lesson..."
         />
       </label>
       {answer ? <p className="mt-3 rounded-2xl bg-gray-50 p-3 text-sm font-semibold leading-6 text-muted">{answer}</p> : null}

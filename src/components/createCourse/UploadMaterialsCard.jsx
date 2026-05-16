@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { Button } from "../ui/Button";
 import { CourseOptions } from "./CourseOptions";
 
-export function UploadMaterialsCard({ onGenerate }) {
+export function UploadMaterialsCard({ onGenerate, disabled = false }) {
   const [files, setFiles] = useState([]);
   const [options, setOptions] = useState({
     level: "Beginner",
@@ -61,8 +61,8 @@ export function UploadMaterialsCard({ onGenerate }) {
         <CourseOptions value={options} onChange={setOptions} />
       </div>
 
-      <Button className="mt-7 w-full" onClick={() => onGenerate({ files, ...options })}>
-        Generate Course
+      <Button className="mt-7 w-full" onClick={() => onGenerate({ files, ...options })} disabled={disabled}>
+        {disabled ? "Generating..." : "Generate Course"}
       </Button>
     </section>
   );

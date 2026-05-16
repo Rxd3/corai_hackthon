@@ -57,15 +57,16 @@ Then restart `npm run dev`. In Google Cloud, enable **YouTube Data API v3** for 
 
 - Create course from a topic.
 - Upload TXT, Markdown, DOCX, and PPTX materials for local text extraction.
-- Generate modules, lessons, key concepts, examples, practice tasks, and quizzes.
-- Ask CorAI questions about the current course/module.
+- Generate lessons, key concepts, examples, practice tasks, and quizzes.
+- Save a generated course only after subject-matched non-Shorts YouTube videos are found for every lesson.
+- Ask CorAI questions about the current course/lesson.
 - Take quizzes, save attempts, track progress, weak topics, and study plan.
 - All data is saved in browser `localStorage`.
 
 ## Current Local Limitations
 
 - PDF text extraction is not enabled in browser-only mode.
-- YouTube lookup works locally when a YouTube API key is configured.
+- YouTube lookup is required before a new course is saved, and Shorts are filtered out.
 - Do not deploy this local Gemini-key version publicly because `VITE_GEMINI_API_KEY` is exposed to the browser.
 
 ## Later: Supabase + Vercel

@@ -38,7 +38,7 @@ export function ModuleLessonPage() {
       .loadVideosForModule({ course, module })
       .then((result) => {
         if (!active) return;
-        setVideoStatus(result.videos.length ? "" : "No YouTube videos were found for this module.");
+        setVideoStatus(result.videos.length ? "" : "No non-Shorts YouTube videos were found for this lesson.");
       })
       .catch((error) => active && setVideoStatus(error.message))
       .finally(() => active && setVideoLoading(false));
@@ -62,7 +62,7 @@ export function ModuleLessonPage() {
   }
 
   if (!module || !course) {
-    return <p className="soft-card p-6 text-sm font-bold text-muted">Module not found.</p>;
+    return <p className="soft-card p-6 text-sm font-bold text-muted">Lesson not found.</p>;
   }
 
   const courseModules = data.getModules(course.id).sort((a, b) => a.position - b.position);
@@ -72,7 +72,7 @@ export function ModuleLessonPage() {
 
   return (
     <div>
-      <PageHeader title={`Module ${module.position}: ${module.title}`} subtitle={course.title} />
+      <PageHeader title={`Lesson ${module.position}: ${module.title}`} subtitle={course.title} />
       <div className="mb-6 rounded-[22px] bg-white p-4 shadow-card">
         <div className="mb-2 flex justify-between text-sm font-extrabold text-muted">
           <span>Progress</span>
@@ -82,7 +82,7 @@ export function ModuleLessonPage() {
       </div>
 
       {videoLoading ? (
-        <p className="mb-5 rounded-[20px] bg-navy px-4 py-3 text-sm font-bold text-white">Searching YouTube for this module...</p>
+        <p className="mb-5 rounded-[20px] bg-navy px-4 py-3 text-sm font-bold text-white">Searching YouTube for this lesson...</p>
       ) : null}
       {videoStatus ? <p className="mb-5 rounded-[20px] bg-peach px-4 py-3 text-sm font-bold text-navy">{videoStatus}</p> : null}
 
@@ -159,7 +159,7 @@ export function ModuleLessonRightPanel() {
   return (
     <>
       <section className="soft-card p-5">
-        <h2 className="text-lg font-extrabold text-ink">Module Progress</h2>
+        <h2 className="text-lg font-extrabold text-ink">Lesson Progress</h2>
         <p className="mt-5 text-5xl font-extrabold text-navy">{module.progress}%</p>
         <ProgressBar value={module.progress} className="mt-4" />
         <div className="mt-5 space-y-3 text-sm font-bold text-muted">

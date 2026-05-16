@@ -5,7 +5,7 @@ import { Button } from "../components/ui/Button";
 import { PageHeader } from "../components/ui/PageHeader";
 import { useLearningData } from "../contexts/LearningDataContext";
 
-const quickActions = ["Explain simpler", "Give example", "Generate flashcards", "Create practice question", "Summarize this module"];
+const quickActions = ["Explain simpler", "Give example", "Generate flashcards", "Create practice question", "Summarize this lesson"];
 
 export function AskAIPage() {
   const params = useParams();
@@ -79,7 +79,7 @@ export function AskAIPage() {
           >
             {modules.map((module) => (
               <option key={module.id} value={module.id}>
-                Module {module.position}: {module.title}
+                Lesson {module.position}: {module.title}
               </option>
             ))}
           </select>
@@ -138,7 +138,7 @@ export function AskAIRightPanel() {
         <div className="mt-3 rounded-[20px] bg-navy p-4 text-white">
           <p className="text-sm font-extrabold">{course?.title || "No course selected"}</p>
           <p className="mt-1 text-xs font-bold text-white/65">
-            {module ? `Module ${module.position}: ${module.title}` : "Create a course to start"}
+            {module ? `Lesson ${module.position}: ${module.title}` : "Create a course to start"}
           </p>
         </div>
       </section>

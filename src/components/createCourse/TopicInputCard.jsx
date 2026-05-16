@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Button } from "../ui/Button";
 import { CourseOptions } from "./CourseOptions";
 
-export function TopicInputCard({ onBuild }) {
+export function TopicInputCard({ onBuild, disabled = false }) {
   const [topic, setTopic] = useState("");
   const [options, setOptions] = useState({
     level: "Beginner",
@@ -37,8 +37,8 @@ export function TopicInputCard({ onBuild }) {
         <CourseOptions value={options} onChange={setOptions} />
       </div>
 
-      <Button className="mt-7 w-full" onClick={() => onBuild({ topic, files: [], ...options })}>
-        Build My Course
+      <Button className="mt-7 w-full" onClick={() => onBuild({ topic, files: [], ...options })} disabled={disabled}>
+        {disabled ? "Generating..." : "Build My Course"}
       </Button>
     </section>
   );

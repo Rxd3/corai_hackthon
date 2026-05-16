@@ -81,7 +81,7 @@ export function MyCoursesPage() {
             <p className="text-xs font-extrabold opacity-70">{course.source}</p>
             <h2 className="mt-2 min-h-14 text-2xl font-extrabold leading-tight">{course.title}</h2>
             <div className="mt-5 grid grid-cols-2 gap-3 text-sm font-bold">
-              <span className="rounded-2xl bg-white/45 px-3 py-2">{course.modules} modules</span>
+              <span className="rounded-2xl bg-white/45 px-3 py-2">{course.modules} lessons</span>
               <span className="rounded-2xl bg-white/45 px-3 py-2">{course.progress}% progress</span>
             </div>
             <ProgressBar value={course.progress} className="mt-5 bg-white/45" />

@@ -66,7 +66,7 @@ function fallbackPlan(data) {
     id: module.id,
     course_id: module.course_id,
     module_id: module.id,
-    title: `Module ${module.position}: ${module.title}`,
+    title: `Lesson ${module.position}: ${module.title}`,
     meta: `${module.estimated_minutes} min lesson + quiz`,
     due_date: addDays(index),
   }));

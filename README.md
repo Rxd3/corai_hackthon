@@ -1,6 +1,6 @@
 # CorAI
 
-CorAI is an AI course builder for students. The idea is simple: a learner can type a subject or upload class materials, and CorAI turns that input into a structured learning path with modules, explanations, key concepts, examples, practice tasks, quizzes, video lessons, progress tracking, and an AI tutor chat.
+CorAI is an AI course builder for students. The idea is simple: a learner can type a subject or upload class materials, and CorAI turns that input into a structured learning path with lessons, explanations, key concepts, examples, practice tasks, quizzes, video lessons, progress tracking, and an AI tutor chat.
 
 The current version is intentionally **local-first**. It is built so the product flow can be tested quickly without Supabase, Vercel, login, serverless functions, or a database. Data is stored in the browser with `localStorage`.
 
@@ -10,10 +10,10 @@ The current version is intentionally **local-first**. It is built so the product
 - Uses Gemini locally when a Gemini API key is configured.
 - Falls back to generated demo content when Gemini is not configured or fails.
 - Extracts local text from TXT, Markdown, DOCX, and PPTX files.
-- Creates modules with explanations, concepts, examples, practice tasks, and quizzes.
-- Searches YouTube for lesson videos when a YouTube API key is configured.
-- Saves quiz attempts, scores, weak topics, module progress, study plans, and AI chat history locally.
-- Lets the user ask CorAI questions about the selected course/module.
+- Creates lessons with explanations, concepts, examples, practice tasks, and quizzes.
+- Searches YouTube for subject-matched lesson videos during course creation. A course is only saved when non-Shorts videos are found for every lesson.
+- Saves quiz attempts, scores, weak topics, lesson progress, study plans, and AI chat history locally.
+- Lets the user ask CorAI questions about the selected course/lesson.
 
 ## Tech Stack
 
@@ -99,7 +99,7 @@ src/
 
   lib/
     localAi.js                    Gemini calls, YouTube search, local file extraction, fallback generator
-    learningTransforms.js         Converts stored rows into UI-friendly course/module/progress data
+    learningTransforms.js         Converts stored rows into UI-friendly course/lesson/progress data
     navItems.js                   Sidebar/mobile navigation config
     classNames.js                 Utility for joining CSS class strings
 
@@ -107,13 +107,13 @@ src/
     DashboardPage.jsx             Overview, stats, recommended tasks
     CreateCoursePage.jsx          Topic/file course creation flow
     MyCoursesPage.jsx             Course list/search/filter
-    CourseDetailsPage.jsx         Course overview, outcomes, roadmap, module cards
-    ModuleLessonPage.jsx          Lesson content, YouTube video, practice, module AI box
+    CourseDetailsPage.jsx         Course overview, outcomes, roadmap, lesson cards
+    ModuleLessonPage.jsx          Lesson content, YouTube video, practice, lesson AI box
     QuizPage.jsx                  Quiz answering and scoring
     QuizResultPage.jsx            Attempt result and weak topics
     ProgressTrackingPage.jsx      Progress table, weak topics, activity chart
     StudyPlanPage.jsx             Local generated study schedule
-    AskAIPage.jsx                 Course/module scoped AI chat
+    AskAIPage.jsx                 Course/lesson scoped AI chat
     SettingsPage.jsx              Settings placeholder/cards
 
   components/
@@ -121,7 +121,7 @@ src/
     ui/                           Shared buttons, cards, headers, progress/status components
     dashboard/                    Dashboard-specific cards
     createCourse/                 Upload/topic input/options components
-    course/                       Course header, roadmap, outcomes, module cards
+    course/                       Course header, roadmap, outcomes, lesson cards
     module/                       Lesson, examples, practice, video, AI box
     quiz/                         Quiz question/result cards
     progress/                     Progress overview/table/charts
@@ -133,7 +133,7 @@ src/
 2. `LearningDataContext.createCourse()` calls `generateLocalCourse()` from `localAi.js`.
 3. `localAi.js` extracts text from supported files and calls Gemini if a key exists.
 4. If Gemini succeeds, its JSON response becomes the course. If not, a fallback course is created.
-5. `LearningDataContext` converts the generated course into local records: courses, modules, lessons, quizzes, questions, and study plan items.
+5. `LearningDataContext` converts the generated course into local records: courses, lessons, quizzes, questions, and study plan items.
 6. The records are saved to `localStorage` under `corai.local.v1`.
 7. Pages read from `LearningDataContext` and transform records for display.
 
@@ -142,16 +142,17 @@ src/
 Gemini is used for:
 
 - Course generation
-- Lesson/module structure
+- Lesson structure
 - Quiz generation
 - Ask CorAI chat answers
 
 YouTube Data API is used for:
 
-- Searching videos by course title and module title
-- Caching found videos in localStorage per module
+- Searching videos by course title and lesson title
+- Filtering out Shorts and videos under 4 minutes
+- Caching found videos in localStorage per lesson
 
-If Gemini or YouTube are not configured, the app still runs. Gemini falls back to local generated content. YouTube shows a setup/status message.
+If Gemini is not configured, the app still runs with local generated content. If YouTube is not configured or no videos are found, the course is not saved.
 
 ## Local Limitations
 
@@ -168,7 +169,7 @@ When the product flow is stable, the next production step is to move sensitive w
 - File storage in Supabase Storage.
 - Server-side Gemini calls so API keys are not exposed.
 - Server-side YouTube lookup and caching.
-- Postgres tables for courses, modules, quizzes, progress, chat history, and uploaded material chunks.
+- Postgres tables for courses, lessons, quizzes, progress, chat history, and uploaded material chunks.
 - Vector search/RAG for Ask CorAI over uploaded documents.
 
 This local version is the fast product-validation layer before that backend work.

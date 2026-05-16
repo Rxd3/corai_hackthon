@@ -34,7 +34,7 @@ export function CourseDetailsPage() {
       </div>
 
       <section>
-        <h2 className="mb-4 text-xl font-extrabold text-ink">Modules</h2>
+        <h2 className="mb-4 text-xl font-extrabold text-ink">Lessons</h2>
         <div className="grid gap-5 md:grid-cols-2">
           {modules.map((module) => (
             <ModuleCard key={module.id} module={module} onOpen={() => navigate(`/courses/${course.id}/modules/${module.id}`)} />
@@ -70,7 +70,7 @@ export function CourseDetailsRightPanel() {
         <p className="mt-5 text-5xl font-extrabold text-navy">{course.progress}%</p>
         <ProgressBar value={course.progress} className="mt-4" />
         <div className="mt-5 space-y-3 text-sm font-bold text-muted">
-          <p>Completed: {modules.filter((module) => module.progress >= 100).length} / {modules.length} modules</p>
+          <p>Completed: {modules.filter((module) => module.progress >= 100).length} / {modules.length} lessons</p>
           <p>Quizzes passed: {passedQuizzes} / {modules.length}</p>
           <p>Average score: {averageScore(data.attempts.filter((attempt) => attempt.course_id === course.id))}%</p>
         </div>
@@ -98,7 +98,7 @@ export function CourseDetailsRightPanel() {
       <section className="soft-card p-5">
         <h2 className="text-lg font-extrabold text-ink">Next Step</h2>
         <p className="mt-3 text-sm font-semibold leading-6 text-muted">
-          {nextModule ? `Continue ${nextModule.title} and complete the quiz.` : "Create a module to continue."}
+          {nextModule ? `Continue ${nextModule.title} and complete the quiz.` : "Create a lesson to continue."}
         </p>
         <Button className="mt-5 w-full" onClick={() => nextModule && navigate(`/courses/${course.id}/modules/${nextModule.id}`)}>
           Open Plan

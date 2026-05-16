@@ -12,7 +12,7 @@ export function CourseRoadmap({ modules = [] }) {
   const roadmap = [
     { label: "Start", status: modules.some((module) => module.progress > 0) ? "completed" : "not started", Icon: Check },
     ...modules.map((module) => ({
-      label: `Module ${module.position}: ${module.title}`,
+      label: `Lesson ${module.position}: ${module.title}`,
       status: module.status,
       Icon: module.status === "completed" ? Check : module.status === "in progress" ? Play : module.status === "needs review" ? RotateCcw : Circle,
     })),
