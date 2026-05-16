@@ -7,7 +7,6 @@ import {
   PlusCircle,
   RotateCcw,
   Settings,
-  Trophy,
 } from "lucide-react";
 import { navItems } from "../../lib/navItems";
 import { cn } from "../../lib/classNames";
@@ -17,7 +16,6 @@ const iconMap = {
   create: PlusCircle,
   courses: GraduationCap,
   "study-plan": CalendarDays,
-  quiz: Trophy,
   "ask-ai": MessageCircleQuestion,
   settings: Settings,
 };

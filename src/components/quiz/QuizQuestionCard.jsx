@@ -16,6 +16,8 @@ export function QuizQuestionCard({
   onNext,
   canSubmit,
 }) {
+  const isLastQuestion = questionIndex === total - 1;
+
   return (
     <SectionCard>
       <p className="text-sm font-extrabold text-muted">Question {questionIndex + 1} of {total}</p>
@@ -54,14 +56,18 @@ export function QuizQuestionCard({
           Previous
         </Button>
         <div className="flex flex-wrap gap-3">
-          <Button variant="outline" onClick={onNext} disabled={questionIndex === total - 1}>
-            Next
-            <ArrowRight size={17} />
-          </Button>
-          <Button onClick={onSubmit} disabled={!canSubmit}>
-            <Send size={17} />
-            Submit Quiz
-          </Button>
+          {!isLastQuestion ? (
+            <Button variant="outline" onClick={onNext}>
+              Next
+              <ArrowRight size={17} />
+            </Button>
+          ) : null}
+          {isLastQuestion ? (
+            <Button onClick={onSubmit} disabled={!canSubmit}>
+              <Send size={17} />
+              Submit Quiz
+            </Button>
+          ) : null}
         </div>
       </div>
     </SectionCard>

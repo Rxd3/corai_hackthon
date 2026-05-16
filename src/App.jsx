@@ -104,7 +104,7 @@ function AppRoutes() {
       <Route
         path="/courses/:courseId/modules/:moduleId/quiz"
         element={
-          <ShellRoute activePage="quiz" rightPanel={<QuizRightPanel />}>
+          <ShellRoute activePage="courses" rightPanel={<QuizRightPanel />}>
             <QuizPage />
           </ShellRoute>
         }
@@ -112,7 +112,7 @@ function AppRoutes() {
       <Route
         path="/quiz"
         element={
-          <ShellRoute activePage="quiz" rightPanel={<QuizRightPanel />}>
+          <ShellRoute activePage="courses" rightPanel={<QuizRightPanel />}>
             <QuizPage />
           </ShellRoute>
         }
@@ -120,7 +120,7 @@ function AppRoutes() {
       <Route
         path="/quiz-result/:attemptId"
         element={
-          <ShellRoute activePage="quiz">
+          <ShellRoute activePage="courses">
             <QuizResultPage />
           </ShellRoute>
         }

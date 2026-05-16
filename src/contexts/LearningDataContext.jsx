@@ -1,5 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { generateLocalCourse, answerLocalQuestion, searchYouTubeVideos } from "../lib/localAi";
+import {
+  generateLocalCourse,
+  answerLocalQuestion,
+  buildModuleVideoSearchProfile,
+  improveStoredModuleForCourse,
+  improveStoredQuestionsForModule,
+  searchYouTubeVideos,
+} from "../lib/localAi";
 import {
   courseProgress,
   decorateCourse,
@@ -160,29 +167,35 @@ export function LearningDataProvider({ children }) {
 
   const loadVideosForModule = useCallback(async ({ course, module }) => {
     const current = loadState();
-    const cached = current.videos.filter((video) => video.module_id === module.id);
+    const profile = buildModuleVideoSearchProfile({ course, module });
+    const cached = current.videos.filter((video) => video.module_id === module.id && video.query_signature === profile.signature);
     if (cached.length) {
       return { videos: cached, cached: true };
     }
 
-    const videos = await searchYouTubeVideos(`${course.title} ${module.title}`);
+    const videos = await searchYouTubeVideos({ course, module });
     const now = new Date().toISOString();
     const rows = videos.map((video) => ({
       id: id("video"),
       user_id: localUserId,
       course_id: course.id,
       module_id: module.id,
+      video_id: video.video_id,
       title: video.title,
       url: video.url,
       thumbnail_url: video.thumbnail_url,
       channel_title: video.channel_title,
       source: video.source,
+      search_query: video.search_query || profile.query,
+      query_signature: video.query_signature || profile.signature,
+      match_score: video.match_score || 0,
+      duration_seconds: video.duration_seconds || 0,
       created_at: now,
     }));
 
     setState((latest) => ({
       ...latest,
-      videos: [...latest.videos, ...rows],
+      videos: [...latest.videos.filter((video) => video.module_id !== module.id || video.query_signature !== profile.signature), ...rows],
     }));
 
     return { videos: rows, cached: false };
@@ -215,7 +228,18 @@ export function LearningDataProvider({ children }) {
       getModules: (courseId) => decoratedModules.filter((module) => module.course_id === courseId),
       getModule: (moduleId) => decoratedModules.find((module) => module.id === moduleId),
       getLesson: (moduleId) => state.lessons.find((lesson) => lesson.module_id === moduleId),
-      getVideos: (moduleId) => state.videos.filter((video) => video.module_id === moduleId),
+      getVideos: (moduleId) => {
+        const module = decoratedModules.find((item) => item.id === moduleId);
+        const course = module ? decoratedCourses.find((item) => item.id === module.course_id) : null;
+        if (!module || !course) {
+          return [];
+        }
+
+        const profile = buildModuleVideoSearchProfile({ course, module });
+        return state.videos
+          .filter((video) => video.module_id === moduleId && video.query_signature === profile.signature)
+          .sort((a, b) => (b.match_score || 0) - (a.match_score || 0));
+      },
       getQuizForModule: (moduleId) => state.quizzes.find((quiz) => quiz.module_id === moduleId),
       getQuestions: (quizId) => state.questions.filter((question) => question.quiz_id === quizId),
       getLatestAttemptForQuiz: (quizId) => latestAttemptForQuiz(quizId, state),
@@ -285,6 +309,8 @@ function buildCourseState(current, course, payload, fileContexts) {
       examples: module.examples,
       practice_tasks: module.practiceTasks,
       estimated_minutes: module.estimatedMinutes,
+      video_search_query: module.videoSearchQuery,
+      video_keywords: module.videoKeywords,
       created_at: now,
       updated_at: now,
     });
@@ -364,10 +390,42 @@ function buildCourseState(current, course, payload, fileContexts) {
 function loadState() {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-    return parsed ? { ...emptyState, ...parsed } : emptyState;
+    return parsed ? migrateState({ ...emptyState, ...parsed }) : emptyState;
   } catch {
     return emptyState;
   }
+}
+
+function migrateState(state) {
+  const coursesById = new Map(state.courses.map((course) => [course.id, course]));
+  const modules = state.modules.map((module) => {
+    const course = coursesById.get(module.course_id);
+    return course ? improveStoredModuleForCourse({ course, module }) : module;
+  });
+  const modulesById = new Map(modules.map((module) => [module.id, module]));
+  const questionsByModuleId = state.questions.reduce((groups, question) => {
+    const current = groups.get(question.module_id) || [];
+    current.push(question);
+    groups.set(question.module_id, current);
+    return groups;
+  }, new Map());
+  const repairedQuestionsById = new Map();
+
+  for (const [moduleId, questions] of questionsByModuleId.entries()) {
+    const module = modulesById.get(moduleId);
+    const course = module ? coursesById.get(module.course_id) : null;
+    if (!module || !course) continue;
+
+    for (const question of improveStoredQuestionsForModule({ course, module, questions })) {
+      repairedQuestionsById.set(question.id, question);
+    }
+  }
+
+  return {
+    ...state,
+    modules,
+    questions: state.questions.map((question) => repairedQuestionsById.get(question.id) || question),
+  };
 }
 
 function id(prefix) {

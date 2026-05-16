@@ -98,7 +98,7 @@ function buildRecommendedTasks(data) {
       course: firstCourse.title,
       date: "Today",
       color: "bg-lavender",
-      quizPath: `/courses/${firstCourse.id}/modules/${reviewModule.id}/quiz`,
+      quizPath: `/courses/${firstCourse.id}/modules/${reviewModule.id}#module-quiz`,
     },
     {
       type: "Watch Lesson",
