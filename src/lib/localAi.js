@@ -142,11 +142,12 @@ export function improveStoredModuleForCourse({ course, module }) {
   });
   const courseTitle = cleanCourseTitle(course?.title || course?.source_label || "") || cleanSearchText(course?.title || course?.source_label || "course");
   const videoKeywords = uniqueStrings([...stringArray(module?.video_keywords || module?.videoKeywords), ...keyConcepts, ...tokenizeSearchText(title)]).slice(0, 8);
+  const storedQuery = cleanVideoSearchQuery(module?.video_search_query || module?.videoSearchQuery || "");
 
   return {
     ...module,
     title,
-    video_search_query: buildModuleVideoSearchQuery({ courseTitle, moduleTitle: title, modulePosition, keyConcepts }),
+    video_search_query: storedQuery || buildModuleVideoSearchQuery({ courseTitle, moduleTitle: title, modulePosition, keyConcepts }),
     video_keywords: videoKeywords,
   };
 }

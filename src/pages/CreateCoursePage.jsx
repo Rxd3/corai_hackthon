@@ -1,4 +1,4 @@
-import { BookOpenCheck, CheckCircle2, Circle, FileText, ListChecks, Sparkles, UploadCloud } from "lucide-react";
+import { BookOpenCheck, CheckCircle2, Circle, FileText, ListChecks, Sparkles, UploadCloud, Youtube } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CourseOptions } from "../components/createCourse/CourseOptions";
@@ -40,8 +40,13 @@ const generationSteps = [
     Icon: CheckCircle2,
   },
   {
+    title: "Finding lecture videos...",
+    detail: "Searching YouTube and attaching recommended videos to each lecture.",
+    Icon: Youtube,
+  },
+  {
     title: "Finalizing your course...",
-    detail: "Saving your course, schedule, and progress structure.",
+    detail: "Saving your course, videos, schedule, and progress structure.",
     Icon: UploadCloud,
   },
 ];

@@ -1,6 +1,6 @@
 import { readJson } from "../_shared/http.js";
 import { requireUser } from "../_shared/supabase.js";
-import { buildVideoProfile, searchYouTube } from "../_shared/youtube.js";
+import { buildVideoProfile, makeVideoRows, searchYouTube } from "../_shared/youtube.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -33,21 +33,7 @@ export default async function handler(req, res) {
     }
 
     const videos = await searchYouTube(profile);
-    const rows = videos.map((video) => ({
-      user_id: user.id,
-      course_id: courseId,
-      module_id: moduleId,
-      video_id: video.video_id,
-      title: video.title,
-      url: video.url,
-      thumbnail_url: video.thumbnail_url,
-      channel_title: video.channel_title,
-      source: video.source,
-      search_query: video.search_query,
-      query_signature: video.query_signature,
-      match_score: video.match_score,
-      duration_seconds: video.duration_seconds,
-    }));
+    const rows = makeVideoRows({ userId: user.id, courseId, moduleId, videos });
 
     await supabase.from("videos").delete().eq("user_id", user.id).eq("module_id", moduleId).eq("query_signature", profile.signature);
     const { data, error } = rows.length

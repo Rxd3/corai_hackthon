@@ -362,9 +362,11 @@ export function LearningDataProvider({ children }) {
         const course = module ? decoratedCourses.find((item) => item.id === module.course_id) : null;
         if (!module || !course) return [];
         const profile = buildModuleVideoSearchProfile({ course, module });
-        return state.videos
-          .filter((video) => video.module_id === moduleId && video.query_signature === profile.signature)
+        const moduleVideos = state.videos
+          .filter((video) => video.module_id === moduleId)
           .sort((a, b) => (b.match_score || 0) - (a.match_score || 0));
+        const exactVideos = moduleVideos.filter((video) => video.query_signature === profile.signature);
+        return exactVideos.length ? exactVideos : moduleVideos;
       },
       getQuizForModule: (moduleId) => state.quizzes.find((quiz) => quiz.module_id === moduleId),
       getQuestions: (quizId) => state.questions.filter((question) => question.quiz_id === quizId).sort((a, b) => a.position - b.position),

@@ -1,6 +1,7 @@
 import { readJson } from "../_shared/http.js";
 import { requireUser } from "../_shared/supabase.js";
 import { generateCourse, makeCourseRows } from "../_shared/generation.js";
+import { buildVideoRowsForModule } from "../_shared/youtube.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -25,6 +26,7 @@ export default async function handler(req, res) {
     });
 
     const rows = makeCourseRows({ userId: user.id, course: generated.course, payload, fileContexts });
+    let videoSummary = { totalVideos: 0, modulesWithVideos: 0, totalModules: rows.modules.length };
 
     try {
       await insertOrThrow(supabase, "courses", rows.courseRow);
@@ -34,6 +36,17 @@ export default async function handler(req, res) {
       await insertOrThrow(supabase, "quizzes", rows.quizzes);
       await insertOrThrow(supabase, "questions", rows.questions);
       await insertOrThrow(supabase, "study_plan", rows.studyPlan);
+
+      const videoRowsByModule = await Promise.all(
+        rows.modules.map((module) => buildVideoRowsForModule({ userId: user.id, course: rows.courseRow, module })),
+      );
+      const videoRows = videoRowsByModule.flat();
+      if (videoRows.length) await insertOrThrow(supabase, "videos", videoRows);
+      videoSummary = {
+        totalVideos: videoRows.length,
+        modulesWithVideos: videoRowsByModule.filter((moduleVideos) => moduleVideos.length > 0).length,
+        totalModules: rows.modules.length,
+      };
     } catch (insertError) {
       await supabase.from("courses").delete().eq("id", rows.courseRow.id).eq("user_id", user.id);
       throw insertError;
@@ -42,11 +55,8 @@ export default async function handler(req, res) {
     return res.status(200).json({
       courseId: rows.courseRow.id,
       fallback: generated.fallback,
-      message: generated.fallback
-        ? generated.error
-          ? `Course created with fallback content. ${friendlyGeminiMessage(generated.error)}`
-          : "Course created with fallback content."
-        : "Course generated with Gemini.",
+      message: courseGenerationMessage(generated, videoSummary),
+      videos: videoSummary,
       sourceUploads: rows.sources.map((source) => ({
         sourceId: source.id,
         fileName: source.file_name,
@@ -54,7 +64,7 @@ export default async function handler(req, res) {
       })),
     });
   } catch (error) {
-    return res.status(error.status || 500).json({ error: error.message || "Course generation failed" });
+    return res.status(error.status || 500).json({ error: friendlyGenerationError(error.message) });
   }
 }
 
@@ -69,4 +79,32 @@ function friendlyGeminiMessage(message = "") {
   return message === "Missing GEMINI_API_KEY"
     ? "Add GEMINI_API_KEY to your server environment for AI-generated course content."
     : `Gemini issue: ${message}`;
+}
+
+function friendlyGenerationError(message = "") {
+  if (message === "Missing YOUTUBE_API_KEY") {
+    return "Add YOUTUBE_API_KEY to your server environment before generating courses with lecture videos.";
+  }
+
+  return message || "Course generation failed";
+}
+
+function courseGenerationMessage(generated, videoSummary) {
+  const baseMessage = generated.fallback
+    ? generated.error
+      ? `Course created with fallback content. ${friendlyGeminiMessage(generated.error)}`
+      : "Course created with fallback content."
+    : "Course generated with Gemini.";
+
+  if (!videoSummary.totalModules) {
+    return baseMessage;
+  }
+
+  if (!videoSummary.totalVideos) {
+    return `${baseMessage} YouTube search finished, but no matching lecture videos were found.`;
+  }
+
+  const lectureText = `${videoSummary.modulesWithVideos}/${videoSummary.totalModules} lecture${videoSummary.totalModules === 1 ? "" : "s"}`;
+  const videoText = `${videoSummary.totalVideos} YouTube video${videoSummary.totalVideos === 1 ? "" : "s"}`;
+  return `${baseMessage} Added ${videoText} across ${lectureText}.`;
 }

@@ -67,6 +67,35 @@ export async function searchYouTube(profile) {
     .map(({ description, ...video }) => video);
 }
 
+export async function buildVideoRowsForModule({ userId, course, module }) {
+  const profile = buildVideoProfile({ course, module });
+  const videos = await searchYouTube(profile);
+  return makeVideoRows({
+    userId,
+    courseId: course.id,
+    moduleId: module.id,
+    videos,
+  });
+}
+
+export function makeVideoRows({ userId, courseId, moduleId, videos }) {
+  return videos.map((video) => ({
+    user_id: userId,
+    course_id: courseId,
+    module_id: moduleId,
+    video_id: video.video_id,
+    title: video.title,
+    url: video.url,
+    thumbnail_url: video.thumbnail_url,
+    channel_title: video.channel_title,
+    source: video.source,
+    search_query: video.search_query,
+    query_signature: video.query_signature,
+    match_score: video.match_score,
+    duration_seconds: video.duration_seconds,
+  }));
+}
+
 async function loadDurations(videoIds) {
   const ids = [...new Set(videoIds.filter(Boolean))];
   if (!ids.length) return new Map();
