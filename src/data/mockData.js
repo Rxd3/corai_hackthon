@@ -160,7 +160,6 @@ export const navItems = [
   { id: "courses", label: "My Courses" },
   { id: "study-plan", label: "Study Plan" },
   { id: "quiz", label: "Quiz Center" },
-  { id: "ask-ai", label: "Ask AI" },
   { id: "settings", label: "Settings" },
 ];
 

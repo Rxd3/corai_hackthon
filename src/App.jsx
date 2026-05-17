@@ -2,7 +2,6 @@ import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { AppShell } from "./components/layout/AppShell";
 import { LearningDataProvider, useLearningData } from "./contexts/LearningDataContext";
 import { pathByNavId } from "./lib/navItems";
-import { AskAIPage, AskAIRightPanel } from "./pages/AskAIPage";
 import { AuthPage } from "./pages/AuthPage";
 import { CourseDetailsPage, CourseDetailsRightPanel } from "./pages/CourseDetailsPage";
 import { CreateCoursePage, CreateCourseRightPanel } from "./pages/CreateCoursePage";
@@ -146,22 +145,6 @@ function AppRoutes() {
         element={
           <ShellRoute activePage="study-plan" rightPanel={<StudyPlanRightPanel />}>
             <StudyPlanPage />
-          </ShellRoute>
-        }
-      />
-      <Route
-        path="/ask-ai"
-        element={
-          <ShellRoute activePage="ask-ai" rightPanel={<AskAIRightPanel />}>
-            <AskAIPage />
-          </ShellRoute>
-        }
-      />
-      <Route
-        path="/ask-ai/:courseId"
-        element={
-          <ShellRoute activePage="ask-ai" rightPanel={<AskAIRightPanel />}>
-            <AskAIPage />
           </ShellRoute>
         }
       />

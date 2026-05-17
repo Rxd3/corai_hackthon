@@ -3,7 +3,6 @@ import {
   CalendarDays,
   GraduationCap,
   Home,
-  MessageCircleQuestion,
   PlusCircle,
   LogOut,
   Settings,
@@ -16,7 +15,6 @@ const iconMap = {
   create: PlusCircle,
   courses: GraduationCap,
   "study-plan": CalendarDays,
-  "ask-ai": MessageCircleQuestion,
   settings: Settings,
 };
 

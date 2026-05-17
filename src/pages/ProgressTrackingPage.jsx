@@ -7,6 +7,7 @@ import { StudyActivityChart } from "../components/progress/StudyActivityChart";
 import { WeakTopicHeatmap } from "../components/progress/WeakTopicHeatmap";
 import { PageHeader } from "../components/ui/PageHeader";
 import { useLearningData } from "../contexts/LearningDataContext";
+import { buildStudyPlanItems } from "../lib/studyPlan";
 
 export function ProgressTrackingPage() {
   const { courseId } = useParams();
@@ -40,7 +41,8 @@ export function ProgressRightPanel() {
   const data = useLearningData();
   const course = courseId ? data.getCourse(courseId) : data.courses[0];
   const weakTopic = course ? data.getCourseWeakTopics(course.id)[0] : null;
-  const nextItem = data.studyPlan.find((item) => !item.completed && (!course || item.course_id === course.id));
+  const planItems = buildStudyPlanItems(data, { courseId: course?.id });
+  const nextItem = planItems.find((item) => !item.completed);
 
   return (
     <>
@@ -58,9 +60,9 @@ export function ProgressRightPanel() {
       <section className="soft-card p-5">
         <h2 className="text-lg font-extrabold text-ink">Upcoming Study Plan</h2>
         <div className="mt-4 space-y-3 text-sm font-bold text-muted">
-          <p>{nextItem?.title || "No upcoming items yet"}</p>
-          <p>{nextItem?.meta || "Generate a course to create a plan"}</p>
-          <p>{nextItem?.due_date || "Flexible"}</p>
+          <p>{nextItem?.lessonTitle || "No upcoming items yet"}</p>
+          <p>{nextItem ? `${nextItem.estimatedMinutes} min · ${nextItem.statusLabel}` : "Generate a course to create a plan"}</p>
+          <p>{nextItem?.dueDateLabel || "Flexible"}</p>
         </div>
       </section>
     </>

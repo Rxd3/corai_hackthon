@@ -19,6 +19,7 @@ export function ModuleLessonPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const data = useLearningData();
+  const { startStudySession } = data;
   const module = data.getModule(moduleId);
   const course = data.getCourse(courseId);
   const videos = data.getVideos(moduleId);
@@ -27,6 +28,11 @@ export function ModuleLessonPage() {
   const latestAttempt = quiz ? data.getLatestAttemptForQuiz(quiz.id) : null;
   const [videoStatus, setVideoStatus] = useState("");
   const [videoLoading, setVideoLoading] = useState(false);
+
+  useEffect(() => {
+    if (!course?.id || !module?.id) return;
+    startStudySession({ courseId: course.id, moduleId: module.id });
+  }, [course?.id, module?.id, startStudySession]);
 
   useEffect(() => {
     if (!course || !module || videos.length || videoLoading || videoStatus) return;
@@ -98,6 +104,7 @@ export function ModuleLessonPage() {
           questions={questions}
           latestAttempt={latestAttempt}
           onSaveAttempt={data.saveQuizAttempt}
+          onStartAttempt={() => startStudySession({ courseId: course.id, moduleId: module.id })}
         />
         <ModuleNavigationCard
           previousModule={previousModule}

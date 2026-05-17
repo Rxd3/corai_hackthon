@@ -7,12 +7,13 @@ import { RecommendedTasks } from "../components/dashboard/RecommendedTasks";
 import { StatsCard } from "../components/dashboard/StatsCard";
 import { UpcomingCard } from "../components/dashboard/UpcomingCard";
 import { useLearningData } from "../contexts/LearningDataContext";
+import { formatStudyHours } from "../lib/studyTime";
+import { buildStudyPlanItems } from "../lib/studyPlan";
 
 export function DashboardPage() {
   const navigate = useNavigate();
   const data = useLearningData();
   const completedModules = data.modules.filter((module) => module.progress >= 100 || module.status === "completed").length;
-  const studyHours = Math.max(0.5, Math.round((data.attempts.length * 0.35 + completedModules * 0.5) * 10) / 10);
   const tasks = buildRecommendedTasks(data);
 
   function handleTask(task) {
@@ -42,7 +43,7 @@ export function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <StatsCard value={data.courses.length} label="Courses Generated" icon={GraduationCap} />
         <StatsCard value={completedModules} label="Lectures Completed" icon={BookOpenCheck} />
-        <StatsCard value={`${studyHours}h`} label="Study Hours This Week" icon={BarChart3} chart />
+        <StatsCard value={formatStudyHours(data.studyTimeSummary)} label="Study Hours This Week" icon={BarChart3} />
       </div>
 
       <RecommendedTasks tasks={tasks} onTask={handleTask} />
@@ -51,13 +52,16 @@ export function DashboardPage() {
 }
 
 export function DashboardRightPanel() {
+  const navigate = useNavigate();
   const data = useLearningData();
   const weakTopic = data.attempts.flatMap((attempt) => attempt.weak_topics || [])[0];
+  const planItems = buildStudyPlanItems(data);
+  const nextItem = planItems.find((item) => !item.completed);
 
   return (
     <>
-      <CalendarPanel />
-      <UpcomingCard item={data.studyPlan.find((item) => !item.completed)} />
+      <CalendarPanel items={planItems} />
+      <UpcomingCard item={nextItem} onOpen={(item) => item.path && navigate(item.path)} />
       <AITipCard
         tip={
           weakTopic

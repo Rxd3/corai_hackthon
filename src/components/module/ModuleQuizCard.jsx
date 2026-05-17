@@ -7,7 +7,7 @@ import { SectionCard } from "../ui/SectionCard";
 
 const letters = ["A", "B", "C", "D"];
 
-export function ModuleQuizCard({ course, module, quiz, questions = [], latestAttempt, onSaveAttempt }) {
+export function ModuleQuizCard({ course, module, quiz, questions = [], latestAttempt, onSaveAttempt, onStartAttempt }) {
   const [mode, setMode] = useState(latestAttempt ? "result" : "preview");
   const [questionIndex, setQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState({});
@@ -49,10 +49,16 @@ export function ModuleQuizCard({ course, module, quiz, questions = [], latestAtt
   }
 
   function handleRetake() {
+    onStartAttempt?.();
     setAnswers({});
     setQuestionIndex(0);
     setInlineAttempt(null);
     setError("");
+    setMode("taking");
+  }
+
+  function handleStartQuiz() {
+    onStartAttempt?.();
     setMode("taking");
   }
 
@@ -176,7 +182,7 @@ export function ModuleQuizCard({ course, module, quiz, questions = [], latestAtt
         {practiceComplete ? "Ready when you are. Your score will appear here after submission." : "Finish the practice task first, then take this quiz."}
       </div>
 
-      <Button className="mt-5" onClick={() => setMode("taking")} disabled={!practiceComplete}>
+      <Button className="mt-5" onClick={handleStartQuiz} disabled={!practiceComplete}>
         <ListChecks size={17} />
         Take Quiz
       </Button>

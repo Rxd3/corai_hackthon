@@ -14,6 +14,7 @@ import {
   latestAttemptForQuiz,
   normalizeArray,
 } from "../lib/learningTransforms";
+import { finishStoredStudySession, getStudyTimeSummary, startStoredStudySession } from "../lib/studyTime";
 import { isSupabaseConfigured, supabase } from "../lib/supabaseClient";
 
 const LearningDataContext = createContext(null);
@@ -36,6 +37,7 @@ export function LearningDataProvider({ children }) {
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [state, setState] = useState(emptyState);
+  const [studyTimeSummary, setStudyTimeSummary] = useState(getStudyTimeSummary(null));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -134,7 +136,39 @@ export function LearningDataProvider({ children }) {
     if (!supabase) return;
     await supabase.auth.signOut();
     setState(emptyState);
+    setStudyTimeSummary(getStudyTimeSummary(null));
   }, []);
+
+  useEffect(() => {
+    const userId = session?.user?.id;
+    setStudyTimeSummary(getStudyTimeSummary(userId));
+
+    if (typeof window === "undefined") return undefined;
+
+    const timer = window.setInterval(() => {
+      setStudyTimeSummary(getStudyTimeSummary(userId));
+    }, 60000);
+
+    return () => window.clearInterval(timer);
+  }, [session?.user?.id]);
+
+  const startStudySession = useCallback(({ courseId, moduleId }) => {
+    if (!session?.user) return;
+    startStoredStudySession({ userId: session.user.id, courseId, moduleId });
+  }, [session]);
+
+  const finishStudySession = useCallback(({ courseId, moduleId, completedBy }) => {
+    if (!session?.user) return null;
+
+    const completedSession = finishStoredStudySession({
+      userId: session.user.id,
+      courseId,
+      moduleId,
+      completedBy,
+    });
+    setStudyTimeSummary(getStudyTimeSummary(session.user.id));
+    return completedSession;
+  }, [session]);
 
   const createCourse = useCallback(async (payload) => {
     setLoading(true);
@@ -202,7 +236,8 @@ export function LearningDataProvider({ children }) {
       ...current,
       progress: [data, ...current.progress.filter((item) => item.module_id !== moduleId)],
     }));
-  }, [session, state.progress]);
+    finishStudySession({ courseId, moduleId, completedBy: section });
+  }, [finishStudySession, session, state.progress]);
 
   const saveQuizAttempt = useCallback(async ({ course, module, quiz, questions, answers }) => {
     if (!supabase || !session?.user) throw new Error("Sign in again to save this quiz.");
@@ -259,8 +294,10 @@ export function LearningDataProvider({ children }) {
       progress: [progressRowSaved, ...current.progress.filter((item) => item.module_id !== module.id)],
     }));
 
+    finishStudySession({ courseId: course.id, moduleId: module.id, completedBy: "quiz" });
+
     return attempt;
-  }, [session, state.progress]);
+  }, [finishStudySession, session, state.progress]);
 
   const askAi = useCallback(async ({ courseId, moduleId, message }) => {
     const result = await apiRequest("/api/ai/chat", { courseId, moduleId, message });
@@ -302,11 +339,16 @@ export function LearningDataProvider({ children }) {
       authLoading,
       loading,
       error,
+      studyTimeSummary,
+      weeklyStudyMinutes: studyTimeSummary.totalMinutes,
+      weeklyStudyHours: studyTimeSummary.totalHours,
       refresh,
       signInWithGoogle,
       signOut,
       resetData: signOut,
       createCourse,
+      startStudySession,
+      finishStudySession,
       updateModuleProgress,
       saveQuizAttempt,
       askAi,
@@ -348,7 +390,10 @@ export function LearningDataProvider({ children }) {
     session,
     signInWithGoogle,
     signOut,
+    startStudySession,
+    finishStudySession,
     state,
+    studyTimeSummary,
     updateModuleProgress,
   ]);
 
