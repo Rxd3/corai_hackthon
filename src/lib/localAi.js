@@ -1,4 +1,4 @@
-const VIDEO_SEARCH_VERSION = "module-video-v3";
+const VIDEO_SEARCH_VERSION = "module-video-v4-settings";
 const MIN_LESSON_VIDEO_SECONDS = 240;
 const MAX_LESSON_VIDEO_SECONDS = 1500;
 const BROAD_VIDEO_PATTERNS = [
@@ -16,6 +16,17 @@ const SHORT_VIDEO_PATTERNS = [/\bshorts?\b/i, /#shorts?\b/i, /\byoutube shorts?\
 const EDUCATIONAL_PATTERNS = [/\btutorial\b/i, /\blesson\b/i, /\bexplained\b/i, /\bintroduction\b/i, /\bbeginner/i, /\bguide\b/i];
 const INTRO_PATTERNS = [/\bintro\b/i, /\bintroduction\b/i, /\bbeginner/i, /\bbasics\b/i, /\bfoundations?\b/i, /\bgetting started\b/i];
 const GENERIC_MODULE_TITLES = new Set(["foundations", "core concepts", "worked examples", "practice", "review", "introduction", "overview", "basics"]);
+const SETTING_VIDEO_TERMS = {
+  Beginner: "beginner friendly basics introduction explained",
+  Intermediate: "practical examples tutorial",
+  Advanced: "advanced technical in depth deep dive",
+  "Exam Preparation": "exam preparation practice questions high yield",
+  "Full Course": "lesson tutorial examples",
+  "Quick Revision": "revision summary key points common mistakes",
+  "1 Week": "essentials concise guide",
+  "1 Month": "tutorial lesson examples",
+  "3 Months": "detailed in depth tutorial",
+};
 const VIDEO_STOP_WORDS = new Set([
   "a",
   "an",
@@ -116,10 +127,16 @@ export function buildModuleVideoSearchProfile({ course, module }) {
   const moduleTitle = cleanSearchText(module?.title || "module");
   const modulePosition = number(module?.position || module?.number, 1, 1, 99);
   const keyConcepts = stringArray(module?.key_concepts || module?.keyConcepts).slice(0, 5);
-  const videoKeywords = uniqueStrings([...stringArray(module?.video_keywords || module?.videoKeywords), ...keyConcepts, ...tokenizeSearchText(moduleTitle)]).slice(0, 8);
+  const settings = normalizeVideoSettings(course);
+  const videoKeywords = uniqueStrings([
+    ...stringArray(module?.video_keywords || module?.videoKeywords),
+    ...keyConcepts,
+    ...tokenizeSearchText(moduleTitle),
+    ...tokenizeSearchText(settings.videoIntent),
+  ]).slice(0, 12);
   const storedQuery = cleanVideoSearchQuery(module?.video_search_query || module?.videoSearchQuery || "");
-  const query = storedQuery || buildModuleVideoSearchQuery({ courseTitle, moduleTitle, modulePosition, keyConcepts });
-  const signature = createVideoSearchSignature({ query, videoKeywords, moduleTitle, modulePosition });
+  const query = storedQuery || buildModuleVideoSearchQuery({ courseTitle, moduleTitle, modulePosition, keyConcepts, settings });
+  const signature = createVideoSearchSignature({ query, videoKeywords, moduleTitle, modulePosition, settings });
 
   return {
     query,
@@ -128,6 +145,7 @@ export function buildModuleVideoSearchProfile({ course, module }) {
     modulePosition,
     moduleTitle,
     courseTitle,
+    settings,
   };
 }
 
@@ -141,13 +159,14 @@ export function improveStoredModuleForCourse({ course, module }) {
     index: modulePosition - 1,
   });
   const courseTitle = cleanCourseTitle(course?.title || course?.source_label || "") || cleanSearchText(course?.title || course?.source_label || "course");
-  const videoKeywords = uniqueStrings([...stringArray(module?.video_keywords || module?.videoKeywords), ...keyConcepts, ...tokenizeSearchText(title)]).slice(0, 8);
+  const settings = normalizeVideoSettings(course);
+  const videoKeywords = uniqueStrings([...stringArray(module?.video_keywords || module?.videoKeywords), ...keyConcepts, ...tokenizeSearchText(title), ...tokenizeSearchText(settings.videoIntent)]).slice(0, 12);
   const storedQuery = cleanVideoSearchQuery(module?.video_search_query || module?.videoSearchQuery || "");
 
   return {
     ...module,
     title,
-    video_search_query: storedQuery || buildModuleVideoSearchQuery({ courseTitle, moduleTitle: title, modulePosition, keyConcepts }),
+    video_search_query: storedQuery || buildModuleVideoSearchQuery({ courseTitle, moduleTitle: title, modulePosition, keyConcepts, settings }),
     video_keywords: videoKeywords,
   };
 }
@@ -664,7 +683,7 @@ function repairModuleTitle({ title, courseTitle, keyConcepts = [], index }) {
   return `${courseSubject} Lecture ${index + 1}`;
 }
 
-function buildModuleVideoSearchQuery({ courseTitle, moduleTitle, modulePosition = 1, keyConcepts = [] }) {
+function buildModuleVideoSearchQuery({ courseTitle, moduleTitle, modulePosition = 1, keyConcepts = [], settings = normalizeVideoSettings({}) }) {
   const normalizedModuleTitle = cleanSearchText(moduleTitle);
   const normalizedCourseTitle = cleanSearchText(courseTitle);
   const focusConcept = keyConcepts.find((concept) => cleanSearchText(concept).toLowerCase() !== normalizedModuleTitle.toLowerCase()) || "";
@@ -676,8 +695,8 @@ function buildModuleVideoSearchQuery({ courseTitle, moduleTitle, modulePosition 
       ? normalizedModuleTitle
       : `${normalizedCourseTitle} ${normalizedModuleTitle}`;
   const introAlreadyNamed = INTRO_PATTERNS.some((pattern) => pattern.test(normalizedModuleTitle));
-  const levelPhrase = modulePosition <= 1 ? (introAlreadyNamed ? "for beginners" : "introduction for beginners") : "explained with examples";
-  return cleanSearchText(`${focus} ${levelPhrase}`);
+  const levelPhrase = modulePosition <= 1 || settings.level === "Beginner" ? (introAlreadyNamed ? "basics" : "introduction basics") : "";
+  return cleanSearchText(`${focus} ${settings.videoIntent} ${levelPhrase}`);
 }
 
 function buildYouTubeQuery(query) {
@@ -782,14 +801,29 @@ function isAcceptableLessonVideo(video) {
   return true;
 }
 
-function createVideoSearchSignature({ query, videoKeywords, moduleTitle, modulePosition }) {
+function createVideoSearchSignature({ query, videoKeywords, moduleTitle, modulePosition, settings = normalizeVideoSettings({}) }) {
   return [
     VIDEO_SEARCH_VERSION,
+    settings.level,
+    settings.duration,
+    settings.goal,
     cleanSearchText(query).toLowerCase(),
     cleanSearchText(moduleTitle).toLowerCase(),
     modulePosition,
     uniqueStrings(videoKeywords).join("|").toLowerCase(),
   ].join("::");
+}
+
+function normalizeVideoSettings(course = {}) {
+  const level = ["Beginner", "Intermediate", "Advanced"].includes(course.level) ? course.level : "Beginner";
+  const duration = ["1 Week", "1 Month", "3 Months"].includes(course.duration) ? course.duration : "1 Month";
+  const goal = ["Exam Preparation", "Full Course", "Quick Revision"].includes(course.goal) ? course.goal : "Full Course";
+  return {
+    level,
+    duration,
+    goal,
+    videoIntent: [SETTING_VIDEO_TERMS[level], SETTING_VIDEO_TERMS[duration], SETTING_VIDEO_TERMS[goal]].join(" "),
+  };
 }
 
 function uniqueVideos(videos) {

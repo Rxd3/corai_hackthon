@@ -40,6 +40,10 @@ export default async function handler(req, res) {
       const videoRowsByModule = await Promise.all(
         rows.modules.map((module) => buildVideoRowsForModule({ userId: user.id, course: rows.courseRow, module })),
       );
+      const missingVideoIndex = videoRowsByModule.findIndex((moduleVideos) => moduleVideos.length === 0);
+      if (missingVideoIndex >= 0) {
+        throw new Error(`No setting-matched YouTube videos were found for lecture ${missingVideoIndex + 1}. Try a more specific topic or adjust the course settings.`);
+      }
       const videoRows = videoRowsByModule.flat();
       if (videoRows.length) await insertOrThrow(supabase, "videos", videoRows);
       videoSummary = {
