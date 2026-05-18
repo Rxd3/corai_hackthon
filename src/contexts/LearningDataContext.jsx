@@ -330,7 +330,7 @@ export function LearningDataProvider({ children }) {
       ],
     }));
 
-    return { videos, cached: result.cached };
+    return { videos, suggestions: result.suggestions || [], message: result.message || "", cached: result.cached };
   }, []);
 
   const value = useMemo(() => {

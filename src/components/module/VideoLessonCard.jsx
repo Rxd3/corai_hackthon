@@ -1,7 +1,7 @@
-import { Play, Youtube } from "lucide-react";
+import { Search, Youtube } from "lucide-react";
 import { SectionCard } from "../ui/SectionCard";
 
-export function VideoLessonCard({ video, moduleTitle }) {
+export function VideoLessonCard({ video, moduleTitle, loading = false, status = "", suggestions = [] }) {
   const embedUrl = video?.url?.includes("watch?v=") ? video.url.replace("watch?v=", "embed/") : "";
 
   return (
@@ -10,9 +10,10 @@ export function VideoLessonCard({ video, moduleTitle }) {
         <h2 className="text-xl font-extrabold text-ink">Video Lecture</h2>
         <Youtube className="text-danger" size={24} />
       </div>
-      <div className="mt-5 overflow-hidden rounded-[24px] bg-navy shadow-card">
-        <div className="relative aspect-video">
-          {embedUrl ? (
+      {embedUrl ? (
+        <>
+          <div className="mt-5 overflow-hidden rounded-[24px] bg-navy shadow-card">
+            <div className="relative aspect-video">
             <iframe
               title={video.title}
               src={embedUrl}
@@ -20,22 +21,40 @@ export function VideoLessonCard({ video, moduleTitle }) {
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
               allowFullScreen
             />
-          ) : (
-            <>
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_20%,rgba(183,155,255,0.45),transparent_35%),radial-gradient(circle_at_72%_68%,rgba(236,255,50,0.35),transparent_30%)]" />
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-white">
-                <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-navy shadow-soft">
-                  <Play size={26} fill="currentColor" />
-                </span>
-                <p className="mt-5 px-5 text-lg font-extrabold">{moduleTitle || "Recommended video will appear here"}</p>
-              </div>
-            </>
-          )}
+            </div>
+          </div>
+          <p className="mt-4 text-sm font-semibold text-muted">
+            {video.title} by {video.channel_title || "YouTube"}
+          </p>
+        </>
+      ) : (
+        <div className="mt-5 rounded-[24px] border border-divider bg-gray-50 p-5">
+          <div className="flex gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-lavender text-navy">
+              <Search size={19} />
+            </span>
+            <div>
+              <p className="text-sm font-extrabold text-ink">
+                {loading ? "Searching YouTube for this lecture..." : status || "No exact video match found. Here are useful search suggestions for this lesson."}
+              </p>
+              <p className="mt-2 text-sm font-semibold leading-6 text-muted">
+                {loading
+                  ? "CorAI is trying exact and broader searches before showing suggestions."
+                  : "These are search suggestions only, not fake video links."}
+              </p>
+            </div>
+          </div>
+          {!loading && suggestions.length ? (
+            <div className="mt-4 grid gap-2">
+              {suggestions.map((suggestion) => (
+                <p key={suggestion} className="rounded-2xl bg-white px-4 py-3 text-sm font-bold text-navy shadow-sm">
+                  {suggestion}
+                </p>
+              ))}
+            </div>
+          ) : null}
         </div>
-      </div>
-      <p className="mt-4 text-sm font-semibold text-muted">
-        {video ? `${video.title} by ${video.channel_title || "YouTube"}` : "Recommended videos load after YouTube API setup."}
-      </p>
+      )}
     </SectionCard>
   );
 }

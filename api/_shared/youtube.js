@@ -88,26 +88,31 @@ export function buildVideoProfile({ course, module }) {
 }
 
 export async function searchYouTube(profile) {
-  const durationsToSearch = profile.settings.allowLongVideos ? ["medium", "long"] : ["medium"];
-  const results = await Promise.all(durationsToSearch.map((duration) => searchYouTubeCandidates(profile, duration)));
-  const candidates = results.flat();
+  for (const fallbackProfile of buildSearchProfiles(profile)) {
+    const durationsToSearch = fallbackProfile.settings.allowLongVideos ? ["medium", "long"] : ["medium"];
+    const results = await Promise.all(durationsToSearch.map((duration) => searchYouTubeCandidates(fallbackProfile, duration)));
+    const candidates = results.flat();
+    const durations = await loadDurations(candidates.map((video) => video.video_id));
+    const videos = uniqueVideos(candidates)
+      .map((video) => {
+        const duration = durations.get(video.video_id) || 0;
+        return {
+          ...video,
+          duration_seconds: duration,
+          search_query: fallbackProfile.query,
+          query_signature: profile.signature,
+          match_score: score(video, fallbackProfile, duration),
+        };
+      })
+      .filter((video) => acceptable(video, fallbackProfile))
+      .sort((a, b) => b.match_score - a.match_score)
+      .slice(0, 3)
+      .map(({ description, ...video }) => video);
 
-  const durations = await loadDurations(candidates.map((video) => video.video_id));
-  return uniqueVideos(candidates)
-    .map((video) => {
-      const duration = durations.get(video.video_id) || 0;
-      return {
-        ...video,
-        duration_seconds: duration,
-        search_query: profile.query,
-        query_signature: profile.signature,
-        match_score: score(video, profile, duration),
-      };
-    })
-    .filter((video) => acceptable(video, profile))
-    .sort((a, b) => b.match_score - a.match_score)
-    .slice(0, 3)
-    .map(({ description, ...video }) => video);
+    if (videos.length) return videos;
+  }
+
+  return [];
 }
 
 async function searchYouTubeCandidates(profile, videoDuration) {
@@ -149,6 +154,14 @@ export async function buildVideoRowsForModule({ userId, course, module }) {
     moduleId: module.id,
     videos,
   });
+}
+
+export function buildVideoSuggestions(profile) {
+  return buildSearchProfiles(profile)
+    .map((item) => item.query)
+    .filter(Boolean)
+    .slice(0, 5)
+    .map((query) => `Search on YouTube: ${query}`);
 }
 
 export function makeVideoRows({ userId, courseId, moduleId, videos }) {
@@ -226,6 +239,45 @@ function buildQuery({ courseTitle, moduleTitle, modulePosition, keyConcepts, set
   const focus = generic && focusConcept ? `${courseTitle} ${focusConcept}` : `${courseTitle} ${moduleTitle}`;
   const firstLessonIntent = modulePosition <= 1 || settings.level === "Beginner" ? "introduction basics" : "";
   return cleanText(`${focus} ${settings.videoIntent} ${firstLessonIntent}`);
+}
+
+function buildSearchProfiles(profile) {
+  const primaryConcept = profile.keywords.find((keyword) => cleanText(keyword).toLowerCase() !== profile.moduleTitle.toLowerCase()) || "";
+  const lessonTopic = cleanText(primaryConcept || profile.moduleTitle);
+  const englishKeywords = unique(profile.keywords.flatMap((keyword) => tokens(keyword))).slice(0, 4).join(" ");
+  const levelPrefix = profile.settings.level === "Intermediate" ? "" : profile.settings.level;
+  const goalTerm = profile.settings.goal === "Exam Preparation"
+    ? "exam questions"
+    : profile.settings.goal === "Quick Revision"
+      ? "quick revision summary"
+      : "tutorial";
+  const broadSettings = {
+    ...profile.settings,
+    videoIntent: "tutorial explained lesson",
+    boostPatterns: [...profile.settings.boostPatterns, /\btutorial\b/i, /\bexplained\b/i],
+    avoidPatterns: profile.settings.avoidPatterns,
+    maxSeconds: Math.max(profile.settings.maxSeconds, 1800),
+    allowLongVideos: true,
+  };
+  const suggestionSettings = {
+    ...broadSettings,
+    boostPatterns: broadSettings.boostPatterns,
+    avoidPatterns: [],
+  };
+
+  return unique([
+    profile.query,
+    cleanText(`${levelPrefix} ${profile.moduleTitle} ${goalTerm}`),
+    cleanText(`${profile.moduleTitle} tutorial`),
+    cleanText(`${englishKeywords || lessonTopic} explained tutorial`),
+    cleanText(`${profile.courseTitle} ${lessonTopic} explained`),
+    cleanText(`${lessonTopic} summary`),
+    cleanText(`${lessonTopic} ${profile.settings.goal === "Exam Preparation" ? "solved problems" : "educational lecture"}`),
+  ]).map((query, index) => ({
+    ...profile,
+    query,
+    settings: index === 0 ? profile.settings : index < 4 ? broadSettings : suggestionSettings,
+  }));
 }
 
 function cleanVideoQuery(value = "") {

@@ -27,6 +27,7 @@ export function ModuleLessonPage() {
   const questions = quiz ? data.getQuestions(quiz.id) : [];
   const latestAttempt = quiz ? data.getLatestAttemptForQuiz(quiz.id) : null;
   const [videoStatus, setVideoStatus] = useState("");
+  const [videoSuggestions, setVideoSuggestions] = useState([]);
   const [videoLoading, setVideoLoading] = useState(false);
 
   useEffect(() => {
@@ -43,9 +44,14 @@ export function ModuleLessonPage() {
       .loadVideosForModule({ course, module })
       .then((result) => {
         if (!active) return;
-        setVideoStatus(result.videos.length ? "" : "No non-Shorts YouTube videos were found for this lecture.");
+        setVideoSuggestions(result.suggestions || []);
+        setVideoStatus(result.videos.length ? "" : result.message || "No exact video match found. Here are useful search suggestions for this lesson.");
       })
-      .catch((error) => active && setVideoStatus(error.message))
+      .catch((error) => {
+        if (!active) return;
+        setVideoSuggestions(buildFallbackSuggestions(module.title, course.title, course.goal));
+        setVideoStatus(error.message || "No exact video match found. Here are useful search suggestions for this lesson.");
+      })
       .finally(() => active && setVideoLoading(false));
 
     return () => {
@@ -86,13 +92,14 @@ export function ModuleLessonPage() {
         <ProgressBar value={module.progress} />
       </div>
 
-      {videoLoading ? (
-        <p className="mb-5 rounded-[20px] bg-navy px-4 py-3 text-sm font-bold text-white">Searching YouTube for this lecture...</p>
-      ) : null}
-      {videoStatus ? <p className="mb-5 rounded-[20px] bg-peach px-4 py-3 text-sm font-bold text-navy">{videoStatus}</p> : null}
-
       <div className="space-y-5">
-        <VideoLessonCard video={videos[0]} moduleTitle={module.title} />
+        <VideoLessonCard
+          video={videos[0]}
+          moduleTitle={module.title}
+          loading={videoLoading}
+          status={videoStatus}
+          suggestions={videoSuggestions}
+        />
         <ExplanationCard courseId={course.id} moduleId={module.id} moduleTitle={module.title} explanation={module.explanation} />
         <KeyConceptsCard concepts={normalizeArray(module.key_concepts)} />
         <ExamplesCard examples={normalizeArray(module.examples)} />
@@ -115,6 +122,21 @@ export function ModuleLessonPage() {
       </div>
     </div>
   );
+}
+
+function buildFallbackSuggestions(moduleTitle, courseTitle, goal) {
+  const topic = moduleTitle || courseTitle || "this lesson";
+  const goalQuery = goal === "Exam Preparation"
+    ? `${topic} exam questions`
+    : goal === "Quick Revision"
+      ? `${topic} quick revision summary`
+      : `${topic} explained`;
+
+  return [
+    `Search on YouTube: ${goalQuery}`,
+    `Search on YouTube: ${topic} tutorial`,
+    `Search on YouTube: ${courseTitle || topic} ${topic} educational lecture`,
+  ];
 }
 
 function ModuleNavigationCard({ previousModule, nextModule, onPrevious, onNext }) {

@@ -38,13 +38,13 @@ export default async function handler(req, res) {
       await insertOrThrow(supabase, "questions", rows.questions);
       await insertOrThrow(supabase, "study_plan", rows.studyPlan);
 
-      const videoRowsByModule = await Promise.all(
-        rows.modules.map((module) => buildVideoRowsForModule({ userId: user.id, course: rows.courseRow, module })),
-      );
-      const missingVideoIndex = videoRowsByModule.findIndex((moduleVideos) => moduleVideos.length === 0);
-      if (missingVideoIndex >= 0) {
-        throw new Error(`No setting-matched YouTube videos were found for lecture ${missingVideoIndex + 1}. Try a more specific topic or adjust the course settings.`);
-      }
+      const videoRowsByModule = await Promise.all(rows.modules.map(async (module) => {
+        try {
+          return await buildVideoRowsForModule({ userId: user.id, course: rows.courseRow, module });
+        } catch {
+          return [];
+        }
+      }));
       const videoRows = videoRowsByModule.flat();
       if (videoRows.length) await insertOrThrow(supabase, "videos", videoRows);
       videoSummary = {
@@ -121,10 +121,10 @@ function courseGenerationMessage(generated, videoSummary) {
   }
 
   if (!videoSummary.totalVideos) {
-    return `${baseMessage} YouTube search finished, but no matching lecture videos were found.`;
+    return `${baseMessage} Lessons, quizzes, and study plan are ready. Video suggestions are available inside each lecture.`;
   }
 
   const lectureText = `${videoSummary.modulesWithVideos}/${videoSummary.totalModules} lecture${videoSummary.totalModules === 1 ? "" : "s"}`;
   const videoText = `${videoSummary.totalVideos} YouTube video${videoSummary.totalVideos === 1 ? "" : "s"}`;
-  return `${baseMessage} Added ${videoText} across ${lectureText}.`;
+  return `${baseMessage} Added ${videoText} across ${lectureText}; lectures without exact matches include search suggestions.`;
 }

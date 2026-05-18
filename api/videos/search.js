@@ -1,6 +1,6 @@
 import { readJson } from "../_shared/http.js";
 import { requireUser } from "../_shared/supabase.js";
-import { buildVideoProfile, makeVideoRows, searchYouTube } from "../_shared/youtube.js";
+import { buildVideoProfile, buildVideoSuggestions, makeVideoRows, searchYouTube } from "../_shared/youtube.js";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -29,10 +29,22 @@ export default async function handler(req, res) {
       .order("match_score", { ascending: false });
 
     if (cached.data?.length) {
-      return res.status(200).json({ videos: cached.data, cached: true });
+      return res.status(200).json({ videos: cached.data, suggestions: [], cached: true });
     }
 
-    const videos = await searchYouTube(profile);
+    const suggestions = buildVideoSuggestions(profile);
+    let videos = [];
+    try {
+      videos = await searchYouTube(profile);
+    } catch (searchError) {
+      if (searchError.message !== "Missing YOUTUBE_API_KEY") throw searchError;
+      return res.status(200).json({
+        videos: [],
+        suggestions,
+        cached: false,
+        message: "YouTube search is not configured yet. Search suggestions are available for this lecture.",
+      });
+    }
     const rows = makeVideoRows({ userId: user.id, courseId, moduleId, videos });
 
     await supabase.from("videos").delete().eq("user_id", user.id).eq("module_id", moduleId).eq("query_signature", profile.signature);
@@ -41,10 +53,14 @@ export default async function handler(req, res) {
       : { data: [], error: null };
     if (error) throw error;
 
-    return res.status(200).json({ videos: data || [], cached: false });
+    return res.status(200).json({
+      videos: data || [],
+      suggestions: data?.length ? [] : suggestions,
+      cached: false,
+    });
   } catch (error) {
     const message = error.message === "Missing YOUTUBE_API_KEY"
-      ? "Add YOUTUBE_API_KEY to your server environment, then retry this lecture."
+      ? "YouTube search is not configured yet. Search suggestions are available for this lecture."
       : error.message || "YouTube search failed";
     return res.status(error.status || 500).json({ error: message });
   }
