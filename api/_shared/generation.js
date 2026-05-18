@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { requireEnv } from "./http.js";
+import { generateStructuredJson, generateText } from "./openai.js";
 
-const GEMINI_MODEL = "gemini-2.5-flash";
 const GENERIC_MODULE_TITLES = new Set(["foundations", "core concepts", "worked examples", "practice", "review", "introduction", "overview", "basics"]);
 const STOP_WORDS = new Set(["a", "an", "and", "are", "as", "at", "by", "course", "for", "from", "in", "into", "is", "lesson", "module", "of", "on", "or", "part", "the", "to", "tutorial", "with"]);
 const COURSE_LEVELS = new Set(["Beginner", "Intermediate", "Advanced"]);
@@ -103,11 +102,27 @@ const GOAL_PROFILES = {
 export async function generateCourse({ topic, fileContexts = [], level, duration, goal }) {
   const materialText = buildMaterialText(fileContexts);
   const settings = resolveCourseSettings({ level, duration, goal });
+  const hasUploadedMaterials = fileContexts.length > 0;
+
+  if (hasUploadedMaterials && !materialText) {
+    throw new Error("Uploaded material has no readable text. Please upload a text-based PDF or another readable material file.");
+  }
 
   try {
-    const generated = await generateGeminiCourse({ topic, materialText, settings });
-    return { course: normalizeCourse(generated, settings), fallback: false };
+    const sourceMode = hasUploadedMaterials ? "uploaded_materials" : "topic";
+    const generated = await generateOpenAICourse({ topic, materialText, settings, sourceMode });
+    return {
+      course: normalizeCourse(generated, {
+        ...settings,
+        sourceMode,
+        requireSourceGrounding: hasUploadedMaterials,
+      }),
+      fallback: false,
+    };
   } catch (error) {
+    if (isFatalGenerationError(error) || hasUploadedMaterials) {
+      throw error;
+    }
     return { course: fallbackCourse({ topic, materialText, settings }), fallback: true, error: error.message };
   }
 }
@@ -119,14 +134,16 @@ export async function answerLectureQuestion({ message, course, module, lesson, h
     lesson?.content || "",
   ].filter(Boolean).join("\n\n");
 
-  const prompt = `
+  const instructions = `
 You are CorAI, a concise study assistant.
 Use the course context and answer like a helpful tutor.
 Start directly with the answer. Do not use greetings like "Hey there", "Hi", or "Sure".
 Keep the answer focused on the current lecture only.
 Use short paragraphs and bullet lists when they make the answer easier to scan.
 Avoid markdown tables, decorative headings, and long full-course explanations.
+`;
 
+  const input = `
 Recent chat:
 ${history.map((item) => `${item.role}: ${item.content}`).join("\n")}
 
@@ -138,9 +155,9 @@ ${message}
 `;
 
   try {
-    return cleanTutorAnswer(await generateGeminiText(prompt));
+    return cleanTutorAnswer(await generateText({ instructions, input }));
   } catch (error) {
-    return buildLocalLectureAnswer({ message, course, module, lesson, reason: "Gemini is unavailable right now." });
+    return buildLocalLectureAnswer({ message, course, module, lesson, reason: "OpenAI is unavailable right now." });
   }
 }
 
@@ -366,13 +383,83 @@ function cleanMaterialText(value = "") {
     .trim();
 }
 
-async function generateGeminiCourse({ topic, materialText, settings }) {
+function isFatalGenerationError(error) {
+  const message = String(error?.message || "");
+  return (
+    message === "Missing OPENAI_API_KEY" ||
+    message.includes("OpenAI returned invalid JSON") ||
+    message.includes("OpenAI returned an empty structured response")
+  );
+}
+
+const COURSE_RESPONSE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["title", "description", "estimatedTime", "learningOutcomes", "modules"],
+  properties: {
+    title: { type: "string" },
+    description: { type: "string" },
+    estimatedTime: { type: "string" },
+    learningOutcomes: { type: "array", items: { type: "string" } },
+    modules: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["title", "summary", "explanation", "keyConcepts", "examples", "practiceTasks", "estimatedMinutes", "videoSearchQuery", "videoKeywords", "quiz"],
+        properties: {
+          title: { type: "string" },
+          summary: { type: "string" },
+          explanation: { type: "string" },
+          keyConcepts: { type: "array", items: { type: "string" } },
+          examples: { type: "array", items: { type: "string" } },
+          practiceTasks: { type: "array", items: { type: "string" } },
+          estimatedMinutes: { type: "number" },
+          videoSearchQuery: { type: "string" },
+          videoKeywords: { type: "array", items: { type: "string" } },
+          quiz: {
+            type: "object",
+            additionalProperties: false,
+            required: ["title", "questions"],
+            properties: {
+              title: { type: "string" },
+              questions: {
+                type: "array",
+                items: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["prompt", "options", "correctOptionIndex", "explanation", "topic"],
+                  properties: {
+                    prompt: { type: "string" },
+                    options: { type: "array", items: { type: "string" } },
+                    correctOptionIndex: { type: "number" },
+                    explanation: { type: "string" },
+                    topic: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+async function generateOpenAICourse({ topic, materialText, settings, sourceMode }) {
   const source = materialText
-    ? `Use these study materials as the main source. They may be safely chunked and labeled by file/page; preserve the source order when building the course:\n${materialText}`
+    ? `Use these uploaded study materials as the main source. They are safely chunked and labeled by file/page; preserve source order and page references when building the course:\n${materialText}`
     : `Build the course from this topic: ${topic}`;
 
-  const prompt = `
-You are CorAI, an AI course builder. Create a practical course.
+  const instructions = `
+You are CorAI, an AI course builder. Create a practical course as structured JSON.
+Use only the uploaded material when source mode is uploaded_materials. Do not invent unsupported topics in uploaded-materials mode.
+If a PDF/page label is available, mention page or section references naturally in explanations, examples, practice tasks, quiz prompts, or quiz explanations.
+Make every lesson quiz lesson-specific and source-grounded.
+`;
+
+  const input = `
+Source mode: ${sourceMode}
 
 Course settings selected by the user:
 - Level: ${settings.level}
@@ -392,39 +479,6 @@ These settings are requirements, not decoration:
 
 ${source}
 
-Return only valid JSON with this shape:
-{
-  "title": "Course title",
-  "description": "One sentence description",
-  "estimatedTime": "4 weeks",
-  "learningOutcomes": ["outcome"],
-  "modules": [
-    {
-      "title": "Lecture title",
-      "summary": "Short summary",
-      "explanation": "Clear teaching explanation in 1-3 paragraphs",
-      "keyConcepts": ["concept"],
-      "examples": ["example"],
-      "practiceTasks": ["task"],
-      "estimatedMinutes": 35,
-      "videoSearchQuery": "Specific YouTube search phrase for this exact lecture only",
-      "videoKeywords": ["lecture keyword"],
-      "quiz": {
-        "title": "Quiz title",
-        "questions": [
-          {
-            "prompt": "Question",
-            "options": ["A", "B", "C", "D"],
-            "correctOptionIndex": 0,
-            "explanation": "Why the answer is correct",
-            "topic": "Weak-topic label"
-          }
-        ]
-      }
-    }
-  ]
-}
-
 Rules:
 - Create exactly ${settings.lessonCount} lessons in the modules array.
 - Lecture titles must be concrete sections in real course order.
@@ -436,49 +490,35 @@ Rules:
 - Advanced courses must include deeper technical details and harder exercises.
 - When uploaded materials include pages, chapters, sections, formulas, examples, or exercises, structure lessons around the actual material order.
 - Quizzes, practice, schedule, and video queries must reflect the uploaded material, not generic/static content.
+- If uploaded material includes exercises, convert some of them into quiz questions and practice tasks.
+- If uploaded material includes definitions, formulas, examples, or key concepts, use them in the matching lesson quiz.
+- In uploaded-materials mode, include page/section references wherever possible without making every sentence repetitive.
 - videoSearchQuery must target only that lecture, not a full course.
 - videoSearchQuery must match the selected settings using this intent: ${settings.videoIntent}.
+- Good query examples: "Beginner signals and systems convolution tutorial", "Exam preparation probability distributions solved problems", "Advanced machine learning regularization lecture".
 - Do not use Shorts, full course, complete course, crash course, playlist, masterclass, bootcamp, or all-in-one in videoSearchQuery.
 - Create exactly 5 varied quiz questions per lecture.
 - Wrong answers must be plausible misconceptions, not placeholders.
 - Every question has exactly 4 options and a zero-based correctOptionIndex.
 `;
 
-  return JSON.parse(cleanJson(await generateGeminiText(prompt, true)));
-}
-
-async function generateGeminiText(prompt, json = false) {
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-goog-api-key": requireEnv("GEMINI_API_KEY"),
-    },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.35,
-        responseMimeType: json ? "application/json" : "text/plain",
-      },
-    }),
+  return generateStructuredJson({
+    instructions,
+    input,
+    name: "course_generation",
+    description: "A PDF- or topic-grounded course with lesson quizzes and specialized resource search queries.",
+    schema: COURSE_RESPONSE_SCHEMA,
   });
-
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(payload?.error?.message || "Gemini request failed");
-  }
-
-  const text = payload?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("").trim();
-  if (!text) {
-    throw new Error("Gemini returned an empty response");
-  }
-
-  return text;
 }
 
 function normalizeCourse(course, settings = resolveCourseSettings({})) {
   const title = text(course?.title, "Generated Course");
-  const modules = (Array.isArray(course?.modules) ? course.modules : [])
+  const sourceModules = Array.isArray(course?.modules) ? course.modules : [];
+  if (settings.requireSourceGrounding && sourceModules.length < settings.lessonCount) {
+    throw new Error("OpenAI did not return enough PDF-based lessons. Please try again with a clearer text-based PDF.");
+  }
+
+  const modules = sourceModules
     .slice(0, settings.lessonCount)
     .map((module, index) => normalizeModule(module, index, title, settings));
   while (modules.length < settings.lessonCount) {
@@ -522,6 +562,13 @@ function normalizeModule(module, index, courseTitle, settings = resolveCourseSet
 }
 
 function normalizeQuestions({ courseTitle, moduleTitle, keyConcepts, questions, settings = resolveCourseSettings({}) }) {
+  if (settings.requireSourceGrounding && (!Array.isArray(questions) || questions.length < 5)) {
+    throw new Error(`OpenAI did not return enough PDF-based quiz questions for "${moduleTitle}". Please try again with a clearer text-based PDF.`);
+  }
+  if (settings.requireSourceGrounding && questions.slice(0, 5).some((question) => !Array.isArray(question?.options) || question.options.length !== 4)) {
+    throw new Error(`OpenAI returned incomplete PDF-based answer options for "${moduleTitle}". Please try again with a clearer text-based PDF.`);
+  }
+
   const fallback = buildModuleQuizQuestions({ courseTitle, moduleTitle, keyConcepts, settings });
   const normalized = questions.slice(0, 5).map((question, index) => ({
     prompt: text(question?.prompt, fallback[index]?.prompt || `Question about ${moduleTitle}`),
@@ -530,6 +577,10 @@ function normalizeQuestions({ courseTitle, moduleTitle, keyConcepts, questions, 
     explanation: text(question?.explanation, fallback[index]?.explanation || "Review the lecture explanation."),
     topic: text(question?.topic, fallback[index]?.topic || moduleTitle),
   }));
+
+  if (settings.requireSourceGrounding && normalized.some((question) => !question.prompt || question.options.length !== 4 || question.options.some((option) => /^option\s+\d+$/i.test(option)))) {
+    throw new Error(`OpenAI returned an incomplete PDF-based quiz for "${moduleTitle}". Please try again with a clearer text-based PDF.`);
+  }
 
   while (normalized.length < 5) {
     normalized.push(fallback[normalized.length]);
@@ -987,10 +1038,6 @@ function pickSpecificConcepts(title, materialText = "") {
 
 function tokenizeSearchText(value = "") {
   return cleanSearchText(value).toLowerCase().split(/\s+/).map((word) => word.replace(/[^a-z0-9+#.-]/g, "")).filter((word) => word.length > 2 && !STOP_WORDS.has(word));
-}
-
-function cleanJson(value = "") {
-  return String(value).replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
 }
 
 function text(value, fallback) {

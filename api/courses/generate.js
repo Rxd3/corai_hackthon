@@ -91,13 +91,17 @@ async function insertOrThrow(supabase, table, rows) {
   }
 }
 
-function friendlyGeminiMessage(message = "") {
-  return message === "Missing GEMINI_API_KEY"
-    ? "Add GEMINI_API_KEY to your server environment for AI-generated course content."
-    : `Gemini issue: ${message}`;
+function friendlyOpenAIMessage(message = "") {
+  return message === "Missing OPENAI_API_KEY"
+    ? "Add OPENAI_API_KEY to your server environment for AI-generated course content."
+    : `OpenAI issue: ${message}`;
 }
 
 function friendlyGenerationError(message = "") {
+  if (message === "Missing OPENAI_API_KEY") {
+    return "Add OPENAI_API_KEY to your server environment for AI-generated course content.";
+  }
+
   if (message === "Missing YOUTUBE_API_KEY") {
     return "Add YOUTUBE_API_KEY to your server environment before generating courses with lecture videos.";
   }
@@ -108,9 +112,9 @@ function friendlyGenerationError(message = "") {
 function courseGenerationMessage(generated, videoSummary) {
   const baseMessage = generated.fallback
     ? generated.error
-      ? `Course created with fallback content. ${friendlyGeminiMessage(generated.error)}`
+      ? `Course created with fallback content. ${friendlyOpenAIMessage(generated.error)}`
       : "Course created with fallback content."
-    : "Course generated with Gemini.";
+    : "Course generated with OpenAI.";
 
   if (!videoSummary.totalModules) {
     return baseMessage;

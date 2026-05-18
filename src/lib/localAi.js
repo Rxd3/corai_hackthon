@@ -112,19 +112,6 @@ function buildLocalLectureAnswer({ message, course, module, lesson, reason }) {
   return `${setupNote}For ${moduleTitle}:\n\n${explanation}\n\nUseful focus areas:\n${concepts.length ? concepts.map((concept) => `- ${concept}`).join("\n") : "- The lecture explanation\n- The examples\n- The practice task"}`;
 }
 
-function isGeminiKeyError(error) {
-  const message = String(error?.message || "").toLowerCase();
-  return (
-    message.includes("api key") ||
-    message.includes("apikey") ||
-    message.includes("expired") ||
-    message.includes("invalid") ||
-    message.includes("permission_denied") ||
-    message.includes("unauthorized") ||
-    message.includes("forbidden")
-  );
-}
-
 export function buildModuleVideoSearchProfile({ course, module }) {
   const rawCourseTitle = cleanSearchText(course?.title || course?.source_label || "course");
   const courseTitle = cleanCourseTitle(rawCourseTitle) || rawCourseTitle;
@@ -177,80 +164,6 @@ export function improveStoredModuleForCourse({ course, module }) {
 
 export async function searchYouTubeVideos(input) {
   throw new Error("YouTube search now runs through the server API after sign-in.");
-}
-
-async function generateGeminiCourse({ topic, materialText, level, duration, goal }) {
-  const source = materialText
-    ? `Use these local study materials as the main source:\n${materialText.slice(0, 24000)}`
-    : `Build the course from this topic: ${topic}`;
-
-  const prompt = `
-You are CorAI, an AI course builder. Create a practical course.
-
-Preferences:
-- Level: ${level}
-- Study duration: ${duration}
-- Goal: ${goal}
-- Topic: ${topic || "derived from uploaded materials"}
-
-${source}
-
-Return only valid JSON:
-{
-  "title": "Course title",
-  "description": "One sentence description",
-  "estimatedTime": "4 weeks",
-  "learningOutcomes": ["outcome"],
-  "modules": [
-    {
-      "title": "Lecture title",
-      "summary": "Short summary",
-      "explanation": "Clear teaching explanation in 1-3 paragraphs",
-      "keyConcepts": ["concept"],
-      "examples": ["example"],
-      "practiceTasks": ["task"],
-      "estimatedMinutes": 35,
-      "videoSearchQuery": "Specific YouTube search phrase for this exact lecture only",
-      "videoKeywords": ["lecture keyword"],
-      "quiz": {
-        "title": "Quiz title",
-        "questions": [
-          {
-            "prompt": "Question",
-            "options": ["A", "B", "C", "D"],
-            "correctOptionIndex": 0,
-            "explanation": "Why the answer is correct",
-            "topic": "Weak-topic label"
-          }
-        ]
-      }
-    }
-  ]
-}
-
-Rules:
-- Create 4 to 6 lectures in the modules array.
-- Lecture titles must be concrete sections in the real course order, such as "Python Setup and First Program" or "Variables, Data Types, and Operators".
-- Do not use generic lecture titles like Introduction, Foundations, Core Concepts, Practice, Review, Overview, or Basics by themselves.
-- Make lectures distinct and sequential; each lecture should teach one clear part of the course and should not repeat the course title alone.
-- videoSearchQuery must target only that lecture, not the full course. For the first lecture, prefer a beginner search phrase for the exact first section.
-- Do not use full course, complete course, crash course, masterclass, playlist, or all-in-one in videoSearchQuery.
-- videoSearchQuery must not ask for Shorts.
-- Create exactly 5 quiz questions per lecture.
-- Quiz questions must test only that lecture's title and keyConcepts.
-- Every lecture quiz must have varied prompts; do not repeat the same wording across questions.
-- Wrong answers must be plausible misconceptions, not obvious placeholders.
-- Do not use generic answers like "Option 1", "unrelated to the course", "cannot be practiced", or "only means memorizing terms".
-- Each question topic must be a concrete weak-topic label from that lecture, not the whole course.
-- Every question has exactly 4 options and a zero-based correctOptionIndex.
-`;
-
-  const text = await generateGeminiText(prompt, true);
-  return JSON.parse(cleanJson(text));
-}
-
-async function generateGeminiText(prompt, json = false) {
-  throw new Error("Gemini generation now runs through the server API after sign-in.");
 }
 
 function fallbackCourse({ topic, materialText, level, duration, goal }) {
@@ -494,16 +407,8 @@ function isWeakQuestionSet(questions, moduleTitle = "") {
   return uniquePrompts.size < questions.length || genericPromptCount >= 3 || moduleOnlyPromptCount > 0 || placeholderOptionCount > 0;
 }
 
-function hasGeminiKey() {
-  return false;
-}
-
 function hasYouTubeKey() {
   return false;
-}
-
-function cleanJson(text) {
-  return text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
 }
 
 function text(value, fallback) {

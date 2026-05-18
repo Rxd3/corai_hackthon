@@ -36,16 +36,17 @@ https://your-vercel-preview-url.vercel.app/*
 https://your-vercel-production-url.vercel.app/*
 ```
 
-## 2. Gemini
+## 2. OpenAI
 
-1. Create or renew a Gemini API key in Google AI Studio.
+1. Create an OpenAI API key.
 2. Add it to `.env.local` locally and Vercel in production as:
 
 ```env
-GEMINI_API_KEY=
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-5
 ```
 
-Do not use a `VITE_` Gemini key.
+Do not use a `VITE_` OpenAI key.
 
 ## 3. YouTube Data API
 
@@ -69,7 +70,8 @@ Create `.env.local`:
 VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-GEMINI_API_KEY=
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-5
 YOUTUBE_API_KEY=
 APP_ORIGIN=http://127.0.0.1:5173
 ```
@@ -92,7 +94,8 @@ npm run dev
 VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-GEMINI_API_KEY=
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-5
 YOUTUBE_API_KEY=
 APP_ORIGIN=https://your-vercel-url.vercel.app
 ```

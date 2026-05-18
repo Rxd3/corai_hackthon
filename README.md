@@ -11,14 +11,14 @@ The app is now prepared for a production-style Vercel + Supabase deployment. The
 - Supabase Postgres persistence instead of browser-only `localStorage`.
 - Supabase Row Level Security so each user can access only their own data.
 - Private Supabase Storage bucket for uploaded course materials.
-- Vercel serverless API routes for Gemini, YouTube, and course generation.
-- Gemini and YouTube keys are server-only and must not use `VITE_` names.
+- Vercel serverless API routes for OpenAI, YouTube, and course generation.
+- OpenAI and YouTube keys are server-only and must not use `VITE_` names.
 - `.env.local`, `dist/`, `.vercel/`, and `node_modules/` are ignored and should not be pushed.
 
 ## Features
 
 - Continue with Google and sign out.
-- Create a course from uploaded TXT, Markdown, DOCX, PPTX, or a typed topic.
+- Create a course from uploaded PDF, TXT, Markdown, DOCX, PPTX, or a typed topic.
 - Choose course level, study duration, and goal.
 - Generate sequential lectures with real course structure.
 - Generate module/lecture-specific explanations, examples, practice tasks, and quizzes.
@@ -38,8 +38,9 @@ The app is now prepared for a production-style Vercel + Supabase deployment. The
 - Lucide icons
 - Supabase Auth, Postgres, Storage
 - Vercel serverless functions under `api/`
-- Gemini API
+- OpenAI API
 - YouTube Data API v3
+- `pdfjs-dist` for PDF text extraction
 - `mammoth` for DOCX text extraction
 - `jszip` for PPTX text extraction
 
@@ -58,7 +59,8 @@ VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
 
 SUPABASE_SERVICE_ROLE_KEY=
-GEMINI_API_KEY=
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-5
 YOUTUBE_API_KEY=
 APP_ORIGIN=http://127.0.0.1:5173
 ```
@@ -115,11 +117,12 @@ https://your-vercel-preview-url.vercel.app/*
 https://your-vercel-production-url.vercel.app/*
 ```
 
-## Google Gemini Setup
+## OpenAI Setup
 
-1. Create or renew a Gemini API key in Google AI Studio.
-2. Store it only as `GEMINI_API_KEY`.
-3. Do not create `VITE_GEMINI_API_KEY` for production.
+1. Create an OpenAI API key.
+2. Store it only as `OPENAI_API_KEY`.
+3. Set `OPENAI_MODEL` to the model you want the server API routes to use, for example `gpt-5`.
+4. Do not create `VITE_OPENAI_API_KEY` for production.
 
 ## YouTube API Setup
 
@@ -150,7 +153,8 @@ dist
 VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-GEMINI_API_KEY=
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-5
 YOUTUBE_API_KEY=
 APP_ORIGIN=https://your-vercel-url.vercel.app
 ```
@@ -189,14 +193,14 @@ Uploaded course files are stored in the private `course-materials` bucket under:
 
 - `POST /api/courses/generate`
   - Requires Supabase Auth bearer token.
-  - Calls Gemini server-side.
+  - Calls OpenAI server-side.
   - Creates courses, lectures/modules, lessons, quizzes, questions, sources, and study plan rows.
   - Returns `{ courseId }` and file upload targets.
 
 - `POST /api/ai/chat`
   - Requires auth.
   - Loads course and lecture context from Supabase.
-  - Calls Gemini server-side.
+  - Calls OpenAI server-side.
   - Saves user and assistant messages.
 
 - `POST /api/videos/search`
@@ -216,7 +220,8 @@ Uploaded course files are stored in the private `course-materials` bucket under:
   - `VITE_SUPABASE_ANON_KEY`
 - Keep these server-only:
   - `SUPABASE_SERVICE_ROLE_KEY`
-  - `GEMINI_API_KEY`
+  - `OPENAI_API_KEY`
+  - `OPENAI_MODEL`
   - `YOUTUBE_API_KEY`
 
 Useful checks before pushing:
@@ -232,8 +237,8 @@ npm run build
 - Google sign-in, sign out, and route protection.
 - User A cannot read User B courses, attempts, messages, progress, or files.
 - Topic-based course creation works.
-- TXT, Markdown, DOCX, and PPTX uploads work.
-- Gemini failure creates fallback course content instead of crashing.
+- PDF, TXT, Markdown, DOCX, and PPTX uploads work.
+- OpenAI configuration errors show clear messages without exposing keys.
 - Lecture videos load through `/api/videos/search`.
 - Shorts and broad full-course videos are avoided when better lecture-specific videos exist.
 - Lecture chat calls `/api/ai/chat`.

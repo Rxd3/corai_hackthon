@@ -26,16 +26,10 @@ const helpSteps = [
 ];
 
 function getGenerationSteps({ hasFiles, hasPdf }) {
-  const materialName = hasPdf ? "your PDF" : "your materials";
   return [
     {
-      title: hasFiles ? `Uploading ${materialName}...` : "Analyzing your topic...",
-      detail: hasFiles ? "Preparing the extracted material for course generation." : "Reading your prompt and selected course settings.",
-      Icon: UploadCloud,
-    },
-    {
-      title: hasPdf ? "Reading PDF pages..." : hasFiles ? "Reading uploaded materials..." : "Extracting key topics...",
-      detail: hasPdf ? "Preserving page order and source references from the uploaded PDF." : "Identifying the most useful concepts for the course.",
+      title: hasPdf ? "Reading your PDF..." : hasFiles ? "Reading uploaded materials..." : "Analyzing your topic...",
+      detail: hasPdf ? "Preserving page order and source references from the uploaded PDF." : "Preparing the source for course generation.",
       Icon: FileText,
     },
     {
@@ -44,24 +38,34 @@ function getGenerationSteps({ hasFiles, hasPdf }) {
       Icon: Sparkles,
     },
     {
-      title: "Building your study plan...",
-      detail: "Sequencing lessons and review checkpoints from the same generated plan.",
-      Icon: ListChecks,
+      title: "Applying your course settings...",
+      detail: "Matching level, duration, and goal before generating the course.",
+      Icon: UploadCloud,
     },
     {
-      title: hasPdf ? "Creating lessons from your PDF..." : "Creating lessons...",
+      title: hasPdf ? "Generating lessons from your PDF..." : "Generating lessons...",
       detail: "Writing explanations, examples, and practice tasks that respect your settings.",
       Icon: BookOpenCheck,
     },
     {
-      title: "Preparing quizzes...",
+      title: hasPdf ? "Creating PDF-based quizzes..." : "Creating lesson quizzes...",
       detail: "Creating questions from the selected material, level, duration, and goal.",
       Icon: CheckCircle2,
     },
     {
-      title: "Finalizing your course...",
-      detail: "Finding videos, saving the schedule, and preparing your course workspace.",
+      title: "Preparing specialized resources...",
+      detail: "Finding videos and resource queries matched to each lesson.",
       Icon: Youtube,
+    },
+    {
+      title: "Building your study plan...",
+      detail: "Sequencing lessons, reviews, and schedule items from the same generated plan.",
+      Icon: ListChecks,
+    },
+    {
+      title: "Finalizing your course...",
+      detail: "Saving your course, schedule, quizzes, resources, and progress structure.",
+      Icon: UploadCloud,
     },
   ];
 }
