@@ -16,23 +16,33 @@ export function CourseCard({ course, onOpen, compact = false }) {
       className={cn(
         "focus-ring group flex h-full flex-col rounded-[24px] text-left shadow-card transition duration-200 hover:-translate-y-1 hover:shadow-soft",
         cardStyles[course.cardColor],
-        compact ? "min-h-[132px] p-4" : "min-h-[190px] p-5",
+        compact ? "min-h-[160px] p-5" : "min-h-[190px] p-5",
       )}
     >
       <div className="flex items-start justify-between gap-3">
-        <span className="text-sm font-extrabold opacity-75">{course.number}</span>
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/50 transition group-hover:bg-white">
-          <ArrowUpRight size={17} />
+        <span className="text-xs font-extrabold uppercase tracking-wide opacity-70">{course.number}</span>
+        <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-white/40 transition group-hover:bg-white">
+          <ArrowUpRight size={18} />
         </span>
       </div>
-      <div className={cn("flex-1", compact ? "mt-3" : "mt-5")}>
-        <h3 className={cn("break-words font-extrabold leading-tight", compact ? "text-base" : "text-lg")}>{course.title}</h3>
-        <p className="mt-2 text-xs font-bold leading-4 opacity-75">
-          {course.modules} lectures | {course.progress}%
-        </p>
-        <p className="mt-1 text-xs font-semibold opacity-70">{course.source}</p>
+      <div className="flex-1">
+        <h3 className="mt-4 line-clamp-3 font-extrabold leading-snug text-base">
+          {course.title}
+        </h3>
+        <div className="mt-3 space-y-1">
+          <p className="text-xs font-semibold opacity-75">
+            {course.modules} lectures
+          </p>
+          <p className="text-xs font-medium opacity-65">{course.source}</p>
+        </div>
       </div>
-      <ProgressBar value={course.progress} tone="navy" className={cn("bg-white/45", compact ? "mt-4" : "mt-5")} />
+      <div className="mt-4 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold opacity-75">Progress</span>
+          <span className="text-xs font-bold opacity-80">{course.progress}%</span>
+        </div>
+        <ProgressBar value={course.progress} tone="navy" className="bg-white/35" />
+      </div>
     </button>
   );
 }
